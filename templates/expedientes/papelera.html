@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block titulo %}Papelera — {{ trabajador.nombre_completo }}{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'expedientes:trabajador_detail' trabajador.pk %}" class="pequeno">← Volver al expediente</a>
+    <h1>Papelera de {{ trabajador.nombre_completo }}</h1>
+    <div class="subtitulo">Documentos enviados a la papelera. Podés restaurarlos.</div>
+  </div>
+</div>
+
+<div class="card">
+  {% if documentos %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead><tr><th>Tipo</th><th>Archivo</th><th>Versión</th><th></th></tr></thead>
+      <tbody>
+        {% for d in documentos %}
+        <tr>
+          <td>{{ d.tipo }}</td>
+          <td class="pequeno mut">{{ d.nombre_original|default:d.archivo.name }}</td>
+          <td>v{{ d.version }}</td>
+          <td class="flex" style="gap:.35rem">
+            <a class="btn sec chico" href="{% url 'expedientes:documento_descargar' d.pk %}" target="_blank">Ver</a>
+            <form method="post" action="{% url 'expedientes:documento_restaurar' d.pk %}">
+              {% csrf_token %}
+              <button class="btn chico" type="submit">Restaurar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="vacio">La papelera está vacía.</div>
+  {% endif %}
+</div>
+{% endblock %}

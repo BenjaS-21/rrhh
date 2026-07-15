@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block titulo %}Invitaciones — Expedientes RRHH{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <h1>Invitaciones de registro</h1>
+    <div class="subtitulo">Generá un link por rol para que la persona se registre sola.</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Generar nuevo link</h2>
+  <form method="post" action="{% url 'cuentas:invitaciones' %}">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="grid-2">
+      {% for campo in form %}
+      <div class="campo">
+        <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+        {{ campo }}
+        {% if campo.help_text %}<div class="ayuda">{{ campo.help_text }}</div>{% endif %}
+        {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <button class="btn" type="submit">Generar link</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Links generados</h2>
+  {% if invitaciones %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead>
+        <tr><th>Rol</th><th>Zona</th><th>Depto.</th><th>Estado</th><th>Link</th><th>Vence</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for inv in invitaciones %}
+        <tr>
+          <td><strong>{{ inv.get_rol_display }}</strong></td>
+          <td>{{ inv.zona|default:"—" }}</td>
+          <td>{{ inv.departamento|default:"—" }}</td>
+          <td>
+            {% if inv.estado == "Vigente" %}<span class="badge verde">Vigente</span>
+            {% elif inv.estado == "Usada" %}<span class="badge gris">Usada</span>
+            {% elif inv.estado == "Expirada" %}<span class="badge amarillo">Expirada</span>
+            {% else %}<span class="badge rojo">Anulada</span>{% endif %}
+          </td>
+          <td style="min-width:260px">
+            {% if inv.esta_vigente %}
+              <div class="flex" style="gap:.3rem">
+                <input class="input pequeno" style="font-size:12px" readonly
+                       value="{{ inv.get_link_absoluto }}"
+                       onclick="this.select()" id="lnk{{ inv.pk }}">
+                <button type="button" class="btn sec chico"
+                        onclick="navigator.clipboard.writeText(document.getElementById('lnk{{ inv.pk }}').value); this.textContent='✓'">Copiar</button>
+              </div>
+            {% else %}
+              <span class="mut pequeno">{% if inv.usada_por %}Usó: {{ inv.usada_por.username }}{% else %}—{% endif %}</span>
+            {% endif %}
+          </td>
+          <td class="pequeno mut">{{ inv.expira_en|date:"d/m/Y" }}</td>
+          <td>
+            {% if inv.esta_vigente %}
+            <form method="post" action="{% url 'cuentas:invitacion_anular' inv.pk %}"
+                  onsubmit="return confirm('¿Anular este link? No se podrá usar más.')">
+              {% csrf_token %}
+              <button class="btn peligro chico" type="submit">Anular</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="vacio">Todavía no generaste ningún link. Creá el primero arriba.</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Link no válido — Expedientes RRHH{% endblock %}
+{% block contenedor_clase %}login-wrap{% endblock %}
+
+{% block contenido %}
+<aside class="login-marca">
+  <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
+  <h2>Link no disponible</h2>
+  <p>Este link de invitación ya no se puede usar.</p>
+</aside>
+
+<section class="login-form-side">
+  <div class="login-card">
+    <h1>Invitación {{ invitacion.estado|lower }}</h1>
+    <p class="mut">
+      {% if invitacion.esta_usada %}
+        Este link ya fue utilizado para crear una cuenta y no puede reutilizarse.
+      {% elif invitacion.esta_expirada %}
+        El link de invitación caducó. Pedí al administrador que genere uno nuevo.
+      {% else %}
+        El link fue anulado por el administrador.
+      {% endif %}
+    </p>
+    <a class="btn sec" href="{% url 'cuentas:login' %}">Ir al inicio de sesión</a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block titulo %}Auditoría — Expedientes RRHH{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <h1>Bitácora de auditoría</h1>
+    <div class="subtitulo">Registro de accesos y cambios en el sistema.</div>
+  </div>
+</div>
+
+<div class="card">
+  <form class="grid-2" method="get">
+    <input class="input" type="text" name="q" value="{{ q }}" placeholder="Buscar usuario o descripción…">
+    <select class="select" name="accion" onchange="this.form.submit()">
+      <option value="">Todas las acciones</option>
+      {% for val, etiqueta in acciones %}
+        <option value="{{ val }}" {% if val == accion_sel %}selected{% endif %}>{{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="card">
+  {% if pagina.object_list %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead><tr><th>Fecha/hora</th><th>Usuario</th><th>Acción</th><th>Descripción</th><th>IP</th></tr></thead>
+      <tbody>
+        {% for r in pagina %}
+        <tr>
+          <td class="pequeno mut">{{ r.creado_en|date:"d/m/Y H:i:s" }}</td>
+          <td>{{ r.usuario_texto }}</td>
+          <td><span class="badge azul">{{ r.get_accion_display }}</span></td>
+          <td class="pequeno">{{ r.descripcion }}</td>
+          <td class="pequeno mut">{{ r.ip|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pagina.paginator.num_pages > 1 %}
+  <div class="paginacion">
+    {% if pagina.has_previous %}<a class="btn sec chico" href="?page={{ pagina.previous_page_number }}&accion={{ accion_sel }}&q={{ q }}">← Anterior</a>{% endif %}
+    <span class="mut pequeno">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}<a class="btn sec chico" href="?page={{ pagina.next_page_number }}&accion={{ accion_sel }}&q={{ q }}">Siguiente →</a>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+    <div class="vacio">No hay registros que coincidan.</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% if pagina.object_list %}
+<div class="tabla-scroll">
+  <table class="datos">
+    <thead>
+      <tr><th>Documento</th><th>Apellido y nombre</th><th>Sede</th><th>Puesto</th><th>Docs.</th><th>Estado</th></tr>
+    </thead>
+    <tbody>
+      {% for t in pagina %}
+      <tr onclick="window.location='{% url 'expedientes:trabajador_detail' t.pk %}'" style="cursor:pointer">
+        <td class="mut pequeno">{{ t.documento_identidad }}</td>
+        <td><strong>{{ t.apellidos }}</strong>, {{ t.nombres }}</td>
+        <td>{{ t.sede.nombre }} <span class="mut pequeno">· {{ t.sede.zona.nombre }}</span></td>
+        <td>{{ t.puesto|default:"—" }}</td>
+        <td><span class="badge azul">{{ t.cant_docs }}</span></td>
+        <td>
+          {% if t.estado == "ACTIVO" %}<span class="badge verde">Activo</span>
+          {% else %}<span class="badge gris">Baja</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pagina.paginator.num_pages > 1 %}
+<div class="paginacion">
+  {% if pagina.has_previous %}
+    <a class="btn sec chico" href="?page={{ pagina.previous_page_number }}">← Anterior</a>
+  {% endif %}
+  <span class="mut pequeno">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}
+    <a class="btn sec chico" href="?page={{ pagina.next_page_number }}">Siguiente →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="vacio">No se encontraron trabajadores con esos criterios.</div>
+{% endif %}

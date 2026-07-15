@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block titulo %}{{ trabajador.nombre_completo }} — Expediente{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'expedientes:trabajador_list' %}" class="pequeno">← Volver a expedientes</a>
+    <h1>{{ trabajador.nombre_completo }}</h1>
+    <div class="subtitulo">
+      {{ trabajador.documento_identidad }} ·
+      {{ trabajador.sede.nombre }} ({{ trabajador.sede.zona.nombre }})
+      {% if trabajador.estado == "ACTIVO" %}<span class="badge verde">Activo</span>{% else %}<span class="badge gris">Baja</span>{% endif %}
+    </div>
+  </div>
+  <div class="flex wrap">
+    {% if user.puede_editar %}
+      <a class="btn sec" href="{% url 'expedientes:trabajador_update' trabajador.pk %}">Editar datos</a>
+    {% endif %}
+    {% if user.es_admin %}
+      <a class="btn sec" href="{% url 'expedientes:papelera' trabajador.pk %}">Papelera</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+  <!-- Datos personales -->
+  <div class="card">
+    <h2>Datos del trabajador</h2>
+    <table class="datos">
+      <tr><th>Puesto</th><td>{{ trabajador.puesto|default:"—" }}</td></tr>
+      <tr><th>Email</th><td>{{ trabajador.email|default:"—" }}</td></tr>
+      <tr><th>Teléfono</th><td>{{ trabajador.telefono|default:"—" }}</td></tr>
+      <tr><th>Nacimiento</th><td>{{ trabajador.fecha_nacimiento|date:"d/m/Y"|default:"—" }}</td></tr>
+      <tr><th>Ingreso</th><td>{{ trabajador.fecha_ingreso|date:"d/m/Y"|default:"—" }}</td></tr>
+    </table>
+  </div>
+
+  <!-- Completitud -->
+  <div class="card">
+    <h2>Completitud del expediente</h2>
+    <div class="flex entre">
+      <span class="pequeno mut">{{ cargados }} de {{ requeridos }} obligatorios</span>
+      <strong>{{ pct_completitud }}%</strong>
+    </div>
+    <div class="barra" style="margin:.5rem 0 1rem"><span style="width:{{ pct_completitud }}%"></span></div>
+    {% if faltantes %}
+      <p class="pequeno mut mb0">Faltan:</p>
+      <div class="flex wrap" style="margin-top:.4rem">
+        {% for f in faltantes %}<span class="badge rojo">{{ f.nombre }}</span>{% endfor %}
+      </div>
+    {% else %}
+      <span class="badge verde">Expediente completo ✓</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Subida de documentos -->
+{% if user.puede_editar %}
+<div class="card">
+  <h2>Cargar / escanear documento</h2>
+  <form method="post" action="{% url 'expedientes:documento_subir' trabajador.pk %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="grid-2">
+      <div class="campo">
+        <label for="{{ form_doc.tipo.id_for_label }}">Tipo de documento</label>
+        {{ form_doc.tipo }}
+      </div>
+      <div class="campo">
+        <label for="{{ form_doc.archivo.id_for_label }}">Archivo (PDF o imagen)</label>
+        {{ form_doc.archivo }}
+        <div class="ayuda">Podés escanear con el celular y subir la foto o el PDF.</div>
+      </div>
+      <div class="campo">
+        <label for="{{ form_doc.fecha_vencimiento.id_for_label }}">Vencimiento (si aplica)</label>
+        {{ form_doc.fecha_vencimiento }}
+      </div>
+      <div class="campo">
+        <label for="{{ form_doc.observaciones.id_for_label }}">Observaciones</label>
+        {{ form_doc.observaciones }}
+      </div>
+    </div>
+    <button class="btn" type="submit">⬆ Subir documento</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Lista de documentos -->
+<div class="card">
+  <h2>Documentos del expediente ({{ documentos|length }})</h2>
+  {% if documentos %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead><tr><th>Tipo</th><th>Archivo</th><th>Vencimiento</th><th>Subido por</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+        {% for d in documentos %}
+        <tr>
+          <td><strong>{{ d.tipo }}</strong> {% if d.version > 1 %}<span class="badge gris">v{{ d.version }}</span>{% endif %}</td>
+          <td class="pequeno mut">{{ d.nombre_original|default:d.archivo.name }}</td>
+          <td>
+            {% if d.fecha_vencimiento %}
+              {% if d.esta_vencido %}<span class="badge rojo">Vencido {{ d.fecha_vencimiento|date:"d/m/Y" }}</span>
+              {% elif d.vence_pronto %}<span class="badge amarillo">{{ d.fecha_vencimiento|date:"d/m/Y" }}</span>
+              {% else %}<span class="badge verde">{{ d.fecha_vencimiento|date:"d/m/Y" }}</span>{% endif %}
+            {% else %}<span class="mut">—</span>{% endif %}
+          </td>
+          <td class="pequeno">{{ d.subido_por.get_full_name|default:d.subido_por.username|default:"—" }}</td>
+          <td class="pequeno mut">{{ d.subido_en|date:"d/m/Y H:i" }}</td>
+          <td class="flex" style="gap:.35rem">
+            <a class="btn sec chico" href="{% url 'expedientes:documento_descargar' d.pk %}" target="_blank">Ver</a>
+            {% if user.puede_borrar %}
+            <form method="post" action="{% url 'expedientes:documento_borrar' d.pk %}"
+                  onsubmit="return confirm('¿Enviar este documento a la papelera?')">
+              {% csrf_token %}
+              <button class="btn peligro chico" type="submit">Borrar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="vacio">Todavía no hay documentos cargados en este expediente.</div>
+  {% endif %}
+</div>
+{% endblock %}

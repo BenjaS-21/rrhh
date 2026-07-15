@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} — Configuración{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'configuracion:lista' slug %}" class="pequeno">← {{ cat.plural }}</a>
+    <h1>{{ titulo }}</h1>
+  </div>
+</div>
+
+<div class="card" style="max-width:640px">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors }}</div>{% endif %}
+    {% for campo in form %}
+      <div class="campo">
+        {% if campo.field.widget.input_type == "checkbox" %}
+          <label class="flex" style="gap:.5rem; cursor:pointer">
+            {{ campo }} <span>{{ campo.label }}</span>
+          </label>
+        {% else %}
+          <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          {{ campo }}
+        {% endif %}
+        {% if campo.help_text %}<div class="ayuda">{{ campo.help_text }}</div>{% endif %}
+        {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+      </div>
+    {% endfor %}
+    <div class="flex">
+      <button class="btn" type="submit">Guardar</button>
+      <a class="btn sec" href="{% url 'configuracion:lista' slug %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

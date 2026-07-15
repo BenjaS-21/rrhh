@@ -1,0 +1,52 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e1052d">
+  <title>{% block titulo %}Expedientes RRHH — Damasco{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/estilos.css' %}">
+  <script src="{% static 'js/htmx.min.js' %}" defer></script>
+</head>
+<body>
+  {% if user.is_authenticated %}
+  <header class="topbar">
+    <a class="marca" href="{% url 'expedientes:panel' %}" aria-label="Damasco — Inicio">
+      <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
+    </a>
+    <nav>
+      <a href="{% url 'expedientes:panel' %}">Panel</a>
+      <a href="{% url 'expedientes:trabajador_list' %}">Expedientes</a>
+      <a href="{% url 'expedientes:nomina' %}">Nómina</a>
+      {% if user.es_admin %}
+        <a href="{% url 'cuentas:invitaciones' %}">Invitaciones</a>
+        <a href="{% url 'configuracion:index' %}">Configuración</a>
+        <a href="{% url 'expedientes:auditoria_list' %}">Auditoría</a>
+        <a href="{% url 'admin:index' %}">Administración</a>
+      {% endif %}
+    </nav>
+    <div class="usuario">
+      <strong>{{ user.get_full_name|default:user.username }}</strong>
+      {{ user.get_rol_display }}{% if user.zona %} · {{ user.zona }}{% endif %}{% if user.departamento %} · {{ user.departamento }}{% endif %}
+      · <a href="{% url 'cuentas:logout' %}">Salir</a>
+    </div>
+  </header>
+  {% endif %}
+
+  <main class="{% block contenedor_clase %}contenedor{% endblock %}">
+    {% if messages and user.is_authenticated %}
+      {% for m in messages %}
+        <div class="flash {{ m.tags }}">{{ m }}</div>
+      {% endfor %}
+    {% endif %}
+    {% block contenido %}{% endblock %}
+  </main>
+
+  {% if user.is_authenticated %}
+  <footer class="footer">
+    Sistema de Expedientes · <span class="logo-damasco">{% include "damasco/logo.html" %}</span> · RRHH
+  </footer>
+  {% endif %}
+</body>
+</html>

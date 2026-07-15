@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}Configuración — Expedientes RRHH{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <h1>Configuración</h1>
+    <div class="subtitulo">Administrá los catálogos del sistema.</div>
+  </div>
+</div>
+
+<div class="metricas">
+  {% for t in tarjetas %}
+  <a class="metrica" href="{% url 'configuracion:lista' t.slug %}" style="text-decoration:none; color:inherit; display:block">
+    <div style="font-size:1.6rem; line-height:1">{{ t.icono }}</div>
+    <div class="num" style="font-size:1.5rem; margin-top:.4rem">{{ t.plural }}</div>
+    <div class="lbl">{{ t.activos }} activo{{ t.activos|pluralize }} · {{ t.total }} en total</div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

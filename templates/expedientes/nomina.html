@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Nómina — Expedientes RRHH{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <h1>Nómina de trabajadores</h1>
+    <div class="subtitulo">
+      {% if user.es_admin %}Todas las tiendas (alcance nacional){% elif user.zona %}Zona {{ user.zona }}{% else %}Sin zona asignada{% endif %}
+      · {{ total }} trabajador{{ total|pluralize:"es" }}
+    </div>
+  </div>
+  <a class="btn" href="{% url 'expedientes:nomina_export' %}?{{ querystring }}">⬇ Exportar a Excel</a>
+</div>
+
+<div class="card">
+  <form class="grid-2" method="get"
+        hx-get="{% url 'expedientes:nomina' %}"
+        hx-target="#tabla-nomina"
+        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#id_sede, change from:#id_departamento, change from:#id_estado"
+        hx-push-url="true"
+        hx-indicator="#cargando">
+    <div class="campo mb0">{{ form.q }}</div>
+    <div class="flex wrap" style="gap:.6rem">
+      {{ form.sede }}
+      {{ form.departamento }}
+      {{ form.estado }}
+    </div>
+  </form>
+  <span id="cargando" class="htmx-indicator pequeno mut">Buscando…</span>
+</div>
+
+<div class="card">
+  <div id="tabla-nomina">
+    {% include "expedientes/_tabla_nomina.html" %}
+  </div>
+</div>
+{% endblock %}

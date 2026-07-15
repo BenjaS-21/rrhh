@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} — Expedientes RRHH{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'expedientes:trabajador_list' %}" class="pequeno">← Volver</a>
+    <h1>{{ titulo }}</h1>
+  </div>
+</div>
+
+<div class="card" style="max-width:720px">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="grid-2">
+      {% for campo in form %}
+      <div class="campo">
+        <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+        {{ campo }}
+        {% if campo.help_text %}<div class="ayuda">{{ campo.help_text }}</div>{% endif %}
+        {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="flex">
+      <button class="btn" type="submit">Guardar</button>
+      <a class="btn sec" href="{% url 'expedientes:trabajador_list' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

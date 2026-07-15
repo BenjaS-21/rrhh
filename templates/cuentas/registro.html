@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block titulo %}Crear cuenta — Expedientes RRHH{% endblock %}
+{% block contenedor_clase %}login-wrap{% endblock %}
+
+{% block contenido %}
+<aside class="login-marca">
+  <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
+  <h2>Creá tu cuenta</h2>
+  <p>Fuiste invitado/a al Sistema de Expedientes de RRHH. Completá tus datos para acceder.</p>
+</aside>
+
+<section class="login-form-side">
+  <div class="login-card">
+    <h1>Registro</h1>
+    <p class="mut pequeno">Tu cuenta quedará configurada como:</p>
+    <div class="flex wrap" style="margin:8px 0 20px">
+      <span class="badge azul">{{ invitacion.get_rol_display }}</span>
+      {% if invitacion.zona %}<span class="badge gris">Zona {{ invitacion.zona }}</span>{% endif %}
+      {% if invitacion.departamento %}<span class="badge gris">{{ invitacion.departamento }}</span>{% endif %}
+    </div>
+
+    {% for m in messages %}<div class="flash {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+    <form method="post">
+      {% csrf_token %}
+      {% for campo in form %}
+        <div class="campo">
+          <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          {{ campo }}
+          {% if campo.help_text %}<div class="ayuda">{{ campo.help_text|safe }}</div>{% endif %}
+          {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors }}</div>{% endif %}
+      <button class="btn grande" style="width:100%; justify-content:center" type="submit">Crear cuenta e ingresar</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

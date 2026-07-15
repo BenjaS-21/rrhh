@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titulo %}{{ cat.plural }} — Configuración{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'configuracion:index' %}" class="pequeno">← Configuración</a>
+    <h1>{{ cat.icono }} {{ cat.plural }}</h1>
+  </div>
+  <a class="btn" href="{% url 'configuracion:crear' slug %}">+ Nuevo</a>
+</div>
+
+<div class="card">
+  {% if filas %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead>
+        <tr>
+          {% for h in headers %}<th>{{ h }}</th>{% endfor %}
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in filas %}
+        <tr>
+          {% for celda in fila.celdas %}<td>{{ celda }}</td>{% endfor %}
+          <td>
+            {% if fila.activo %}<span class="badge verde">Activo</span>
+            {% else %}<span class="badge gris">Inactivo</span>{% endif %}
+          </td>
+          <td class="flex" style="gap:.35rem; justify-content:flex-end">
+            <a class="btn sec chico" href="{% url 'configuracion:editar' slug fila.pk %}">Editar</a>
+            <form method="post" action="{% url 'configuracion:toggle' slug fila.pk %}">
+              {% csrf_token %}
+              {% if fila.activo %}
+                <button class="btn sec chico" type="submit">Desactivar</button>
+              {% else %}
+                <button class="btn chico" type="submit">Activar</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="vacio">Todavía no hay {{ cat.plural|lower }}. Creá el primero con “+ Nuevo”.</div>
+  {% endif %}
+</div>
+{% endblock %}

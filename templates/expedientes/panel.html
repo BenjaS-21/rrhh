@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titulo %}Panel — Expedientes RRHH{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <h1>Panel</h1>
+    <div class="subtitulo">
+      {% if user.es_admin %}Vista nacional (todas las zonas){% elif user.zona %}Zona: {{ user.zona }}{% else %}Sin zona asignada{% endif %}
+    </div>
+  </div>
+  {% if user.puede_editar %}
+    <a class="btn" href="{% url 'expedientes:trabajador_create' %}">+ Nuevo expediente</a>
+  {% endif %}
+</div>
+
+<div class="metricas">
+  <div class="metrica"><div class="num">{{ total_trabajadores }}</div><div class="lbl">Trabajadores</div></div>
+  <div class="metrica"><div class="num">{{ total_documentos }}</div><div class="lbl">Documentos cargados</div></div>
+  <div class="metrica aviso"><div class="num">{{ cantidad_por_vencer }}</div><div class="lbl">Vencen en 30 días</div></div>
+  <div class="metrica alerta"><div class="num">{{ vencidos }}</div><div class="lbl">Documentos vencidos</div></div>
+</div>
+
+<div class="card" style="margin-top:1.25rem">
+  <h2>Próximos vencimientos</h2>
+  {% if por_vencer %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead><tr><th>Trabajador</th><th>Documento</th><th>Vence</th></tr></thead>
+      <tbody>
+        {% for d in por_vencer %}
+        <tr>
+          <td><a href="{% url 'expedientes:trabajador_detail' d.trabajador.pk %}">{{ d.trabajador.nombre_completo }}</a></td>
+          <td>{{ d.tipo }}</td>
+          <td><span class="badge amarillo">{{ d.fecha_vencimiento|date:"d/m/Y" }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="vacio">No hay vencimientos en los próximos 30 días. 👍</div>
+  {% endif %}
+</div>
+{% endblock %}
