@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Configuración — Expedientes RRHH{% endblock %}
+{% block titulo %}Configuración — {{ sistema }}{% endblock %}
 
 {% block contenido %}
 <div class="pagina-header">
@@ -9,13 +9,35 @@
   </div>
 </div>
 
-<div class="metricas">
+{% comment %}
+Cada tarjeta tiene dos destinos: ver la lista o cargar uno nuevo directo. Por eso
+no es un <a> entero, que sería un enlace adentro de otro.
+
+Los dos van como botón. El título también lleva a la lista, pero un título no
+parece un destino: quedaba a la vista un solo botón, «Agregar», y para ver lo
+que ya estaba cargado había que adivinar que el nombre era un enlace.
+{% endcomment %}
+<div class="catalogos">
   {% for t in tarjetas %}
-  <a class="metrica" href="{% url 'configuracion:lista' t.slug %}" style="text-decoration:none; color:inherit; display:block">
-    <div style="font-size:1.6rem; line-height:1">{{ t.icono }}</div>
-    <div class="num" style="font-size:1.5rem; margin-top:.4rem">{{ t.plural }}</div>
-    <div class="lbl">{{ t.activos }} activo{{ t.activos|pluralize }} · {{ t.total }} en total</div>
-  </a>
+  <div class="catalogo">
+    <div class="catalogo__icono">{{ t.icono }}</div>
+    <a class="catalogo__nombre" href="{% url 'configuracion:lista' t.slug %}">{{ t.plural }}</a>
+    <div class="catalogo__dato">{{ t.activos }} activo{{ t.activos|pluralize }} · {{ t.total }} en total</div>
+    <div class="catalogo__acciones">
+      <a class="btn sec chico" href="{% url 'configuracion:lista' t.slug %}">Ver listado</a>
+      <a class="btn chico" href="{% url 'configuracion:crear' t.slug %}">+ Agregar {{ t.singular }}</a>
+    </div>
+  </div>
   {% endfor %}
+
+  <div class="catalogo">
+    <div class="catalogo__icono">⚙️</div>
+    <a class="catalogo__nombre" href="{% url 'configuracion:preferencias' %}">Opciones del sistema</a>
+    <div class="catalogo__dato">
+      {% if preferencias.restringir_por_zona %}Cada usuario ve solo su zona
+      {% else %}Todos ven todas las tiendas{% endif %}
+    </div>
+    <a class="btn sec chico" href="{% url 'configuracion:preferencias' %}">Cambiar</a>
+  </div>
 </div>
 {% endblock %}

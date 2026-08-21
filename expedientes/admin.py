@@ -1,6 +1,46 @@
 from django.contrib import admin
 
-from .models import Documento, RegistroAuditoria, TipoDocumento, Trabajador
+from .models import (
+    AsignacionPago, ConceptoPago, DatosContratacion, Documento, Moneda,
+    RegistroAuditoria, TipoDocumento, Trabajador,
+)
+
+
+@admin.register(DatosContratacion)
+class DatosContratacionAdmin(admin.ModelAdmin):
+    list_display = ("trabajador", "estado_civil", "fecha_culminacion", "actualizado_en")
+    list_filter = ("estado_civil", "trabajador__sede__zona")
+    search_fields = ("trabajador__apellidos", "trabajador__documento_identidad")
+    readonly_fields = ("actualizado_por", "actualizado_en")
+
+
+@admin.register(Moneda)
+class MonedaAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "simbolo", "es_nacional", "activa", "orden")
+    list_filter = ("activa", "es_nacional")
+    search_fields = ("codigo", "nombre")
+
+
+@admin.register(ConceptoPago)
+class ConceptoPagoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "clase", "moneda", "activo", "orden")
+    list_filter = ("clase", "moneda", "activo")
+    search_fields = ("nombre",)
+    list_editable = ("activo", "orden")
+    list_select_related = ("moneda",)
+
+
+@admin.register(AsignacionPago)
+class AsignacionPagoAdmin(admin.ModelAdmin):
+    list_display = ("trabajador", "etiqueta", "monto", "moneda", "activo", "actualizado_en")
+    list_filter = ("moneda", "activo", "concepto", "trabajador__sede__zona")
+    search_fields = ("trabajador__apellidos", "trabajador__documento_identidad",
+                     "nombre_libre")
+    readonly_fields = ("creado_por", "creado_en", "actualizado_en")
+
+    @admin.display(description="Concepto")
+    def etiqueta(self, obj):
+        return obj.etiqueta
 
 
 @admin.register(TipoDocumento)

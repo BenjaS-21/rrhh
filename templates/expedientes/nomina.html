@@ -1,34 +1,63 @@
 {% extends "base.html" %}
-{% block titulo %}Nómina — Expedientes RRHH{% endblock %}
+{% block titulo %}Nómina — {{ sistema }}{% endblock %}
 
 {% block contenido %}
 <div class="pagina-header">
   <div>
     <h1>Nómina de trabajadores</h1>
-    <div class="subtitulo">
-      {% if user.es_admin %}Todas las tiendas (alcance nacional){% elif user.zona %}Zona {{ user.zona }}{% else %}Sin zona asignada{% endif %}
-      · {{ total }} trabajador{{ total|pluralize:"es" }}
+    <div class="subtitulo" id="resumen-nomina">
+      {% include "expedientes/_resumen_nomina.html" %}
     </div>
   </div>
-  <a class="btn" href="{% url 'expedientes:nomina_export' %}?{{ querystring }}">⬇ Exportar a Excel</a>
+  <a class="btn" id="exportar-nomina"
+     href="{% url 'expedientes:nomina_export' %}{% if querystring %}?{{ querystring }}{% endif %}">⬇ Exportar a Excel</a>
 </div>
 
 <div class="card">
-  <form class="grid-2" method="get"
+  <form class="grid-2" method="get" id="filtros-nomina"
         hx-get="{% url 'expedientes:nomina' %}"
         hx-target="#tabla-nomina"
-        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#id_sede, change from:#id_departamento, change from:#id_estado"
+        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_departamento, change from:#id_estado"
         hx-push-url="true"
         hx-indicator="#cargando">
     <div class="campo mb0">{{ form.q }}</div>
     <div class="flex wrap" style="gap:.6rem">
-      {{ form.sede }}
+      {% include "expedientes/_filtro_tiendas.html" %}
       {{ form.departamento }}
       {{ form.estado }}
     </div>
   </form>
   <span id="cargando" class="htmx-indicator pequeno mut">Buscando…</span>
 </div>
+
+<script>
+  // El botón de exportar vive fuera de lo que HTMX reemplaza, así que su enlace
+  // se quedaría con los filtros que había al abrir la pantalla. Se rearma con
+  // lo que dice el formulario en este momento: lo que se ve es lo que se baja.
+  (function () {
+    var enlace = document.getElementById("exportar-nomina");
+    var formulario = document.getElementById("filtros-nomina");
+    if (!enlace || !formulario) { return; }
+    var base = enlace.href.split("?")[0];
+
+    function sincronizar() {
+      var datos = new URLSearchParams();
+      new FormData(formulario).forEach(function (valor, nombre) {
+        // Un filtro vacío no filtra nada: ensucia la URL sin cambiar el archivo.
+        if (nombre !== "page" && String(valor).trim() !== "") {
+          datos.append(nombre, valor);
+        }
+      });
+      var cadena = datos.toString();
+      enlace.href = cadena ? base + "?" + cadena : base;
+    }
+
+    formulario.addEventListener("change", sincronizar);
+    formulario.addEventListener("input", sincronizar);
+    document.body.addEventListener("htmx:afterSwap", sincronizar);
+    sincronizar();
+  })();
+</script>
 
 <div class="card">
   <div id="tabla-nomina">

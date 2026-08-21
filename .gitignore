@@ -7,6 +7,7 @@ venv/
 # Django
 db.sqlite3
 db.sqlite3-journal
+/respaldos/
 /media/
 /staticfiles/
 
@@ -19,3 +20,16 @@ db.sqlite3-journal
 *.swp
 .DS_Store
 Thumbs.db
+
+# Generado por `manage.py preparar_plantillas` a partir de los Word originales.
+/plantillas/
+
+# Archivo vacio que quedo suelto.
+/txt
+
+# Los formatos originales de Damasco (contratos, actas, cartas). Este
+# repositorio es PUBLICO: son documentos internos de la empresa y publicarlos
+# es una decision que no toma el codigo. Si se decide incluirlos, se saca esta
+# seccion.
+/*.docx
+/*.rtf

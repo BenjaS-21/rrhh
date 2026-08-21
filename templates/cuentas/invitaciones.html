@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Invitaciones — Expedientes RRHH{% endblock %}
+{% block titulo %}Invitaciones — {{ sistema }}{% endblock %}
 
 {% block contenido %}
 <div class="pagina-header">
@@ -17,8 +17,12 @@
     <div class="grid-2">
       {% for campo in form %}
       <div class="campo">
-        <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-        {{ campo }}
+        {# La casilla va antes de su texto; los demás campos, debajo del rótulo. #}
+        <label for="{{ campo.id_for_label }}">
+          {% if campo.field.widget.input_type == "checkbox" %}{{ campo }} {% endif %}
+          {{ campo.label }}
+        </label>
+        {% if campo.field.widget.input_type != "checkbox" %}{{ campo }}{% endif %}
         {% if campo.help_text %}<div class="ayuda">{{ campo.help_text }}</div>{% endif %}
         {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
       </div>
@@ -34,13 +38,13 @@
   <div class="tabla-scroll">
     <table class="datos">
       <thead>
-        <tr><th>Rol</th><th>Zona</th><th>Depto.</th><th>Estado</th><th>Link</th><th>Vence</th><th></th></tr>
+        <tr><th>Rol</th><th>Alcance</th><th>Depto.</th><th>Estado</th><th>Link</th><th>Vence</th><th></th></tr>
       </thead>
       <tbody>
         {% for inv in invitaciones %}
         <tr>
           <td><strong>{{ inv.get_rol_display }}</strong></td>
-          <td>{{ inv.zona|default:"—" }}</td>
+          <td>{% if inv.acceso_nacional %}Todas las zonas{% else %}{{ inv.zona|default:"—" }}{% endif %}</td>
           <td>{{ inv.departamento|default:"—" }}</td>
           <td>
             {% if inv.estado == "Vigente" %}<span class="badge verde">Vigente</span>

@@ -1,14 +1,14 @@
 @echo off
 REM ============================================================
-REM  Sistema de Expedientes RRHH - Arranque (solo ejecuta)
+REM  GDE - Gestion Digital de Expedientes - Arranque (solo ejecuta)
 REM  Puerto 6652 -> tunel Cloudflare rrhh.aplicacionesdamasco.com
 REM ============================================================
 cd /d "%~dp0"
-title Expedientes RRHH - Servidor
+title GDE - Servidor
 
 echo.
 echo ============================================
-echo   SISTEMA DE EXPEDIENTES RRHH
+echo   GDE - GESTION DIGITAL DE EXPEDIENTES
 echo ============================================
 echo.
 

@@ -1,0 +1,6 @@
+{% comment %}
+Qué se está viendo —y por lo tanto qué se va a exportar—. Vive aparte porque lo
+pintan dos lugares: el encabezado al cargar la página, y la respuesta parcial de
+HTMX cuando se filtra sin recargar.
+{% endcomment %}
+{{ form.resumen_tiendas }} · {{ total }} trabajador{{ total|pluralize:"es" }}

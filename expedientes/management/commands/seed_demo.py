@@ -13,7 +13,9 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from cuentas.models import Area, Departamento, InvitacionRegistro, Sede, Zona
+from cuentas.models import (
+    Area, Cargo, Departamento, InvitacionRegistro, Sede, Zona,
+)
 from expedientes.models import TipoDocumento, Trabajador
 
 Usuario = get_user_model()
@@ -95,14 +97,18 @@ class Command(BaseCommand):
 
         self.stdout.write("Creando trabajadores…")
         for doc, nombres, apellidos, sede_nombre, puesto, depto in TRABAJADORES:
+            # El cargo dejó de ser texto libre: se crea en el catálogo, dentro
+            # de la unidad organizativa de la persona.
+            unidad = deptos[depto]
+            cargo, _ = Cargo.objects.get_or_create(nombre=puesto, departamento=unidad)
             trab, _ = Trabajador.objects.get_or_create(
                 documento_identidad=doc,
                 defaults={
                     "nombres": nombres, "apellidos": apellidos,
-                    "sede": sedes[sede_nombre], "puesto": puesto,
+                    "sede": sedes[sede_nombre], "puesto": cargo,
                 },
             )
-            trab.departamento = deptos.get(depto)
+            trab.departamento = unidad
             trab.save(update_fields=["departamento"])
 
         self.stdout.write("Creando invitaciones de ejemplo…")

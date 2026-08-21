@@ -3,7 +3,10 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.utils.html import format_html
 
-from .models import Area, Departamento, InvitacionRegistro, Sede, Usuario, Zona
+from .models import (
+    Area, Departamento, InvitacionRegistro, Sede, TipoDocumentoIdentidad,
+    Usuario, Zona,
+)
 
 
 @admin.register(Zona)
@@ -27,6 +30,22 @@ class AreaAdmin(admin.ModelAdmin):
     search_fields = ("nombre",)
 
 
+@admin.register(TipoDocumentoIdentidad)
+class TipoDocumentoIdentidadAdmin(admin.ModelAdmin):
+    """Los tipos de cédula se administran solo desde acá.
+
+    No están en Configuración a propósito: es una lista corta que casi nunca
+    cambia, y ponerla ahí sería una tarjeta más entre las que sí se usan todos
+    los días.
+    """
+
+    list_display = ("codigo", "nombre", "activo", "orden")
+    list_editable = ("nombre", "activo", "orden")
+    list_filter = ("activo",)
+    search_fields = ("codigo", "nombre")
+    ordering = ("orden", "codigo")
+
+
 @admin.register(Sede)
 class SedeAdmin(admin.ModelAdmin):
     list_display = ("nombre", "zona", "es_central", "activa")
@@ -38,31 +57,44 @@ class SedeAdmin(admin.ModelAdmin):
 class UsuarioAdmin(UserAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ("username", "get_full_name", "rol", "zona", "departamento", "is_active")
-    list_filter = ("rol", "zona", "departamento", "is_active")
+    list_display = ("username", "get_full_name", "rol", "descripcion_alcance",
+                    "departamento", "is_active")
+    list_filter = ("rol", "acceso_nacional", "zona", "departamento", "is_active")
     search_fields = ("username", "first_name", "last_name", "email")
 
     fieldsets = UserAdmin.fieldsets + (
-        ("Rol, zona y departamento", {"fields": ("rol", "zona", "departamento", "telefono")}),
+        ("Rol, alcance y departamento", {
+            "fields": ("rol", "acceso_nacional", "zona", "departamento", "telefono"),
+            "description": "El alcance sale de una de las dos cosas: una zona, o "
+                           "«acceso a todas las zonas». Sin ninguna de las dos el "
+                           "usuario entra pero no ve ningún expediente.",
+        }),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ("Rol, zona y departamento", {"fields": ("rol", "zona", "departamento")}),
+        ("Rol, alcance y departamento", {
+            "fields": ("rol", "acceso_nacional", "zona", "departamento"),
+        }),
     )
+
+    @admin.display(description="Alcance", ordering="zona__nombre")
+    def descripcion_alcance(self, obj):
+        return obj.descripcion_alcance
 
 
 @admin.register(InvitacionRegistro)
 class InvitacionRegistroAdmin(admin.ModelAdmin):
     """Links tokenizados de registro. El filtro lateral por Rol es el 'menú' de links."""
 
-    list_display = ("descripcion_corta", "rol", "zona", "departamento", "estado_badge", "link_registro", "expira_en", "creada_en")
-    list_filter = ("rol", "activa", "zona", "departamento")   # <- filtro por rol = menú lateral
+    list_display = ("descripcion_corta", "rol", "alcance", "departamento", "estado_badge", "link_registro", "expira_en", "creada_en")
+    list_filter = ("rol", "activa", "acceso_nacional", "zona", "departamento")   # <- filtro por rol = menú lateral
     search_fields = ("email", "nota", "token", "usada_por__username")
     readonly_fields = ("token", "link_registro", "creada_por", "creada_en",
                        "usada_por", "usada_en", "estado_badge")
     fieldsets = (
         ("Configuración del link", {
-            "fields": ("rol", "zona", "departamento", "email", "nota", "expira_en"),
-            "description": "Elegí el rol (y la zona si es RRHH Interior o Solo lectura). "
+            "fields": ("rol", "acceso_nacional", "zona", "departamento", "email", "nota", "expira_en"),
+            "description": "Elegí el rol y, si es RRHH Interior o Solo lectura, una zona "
+                           "o «acceso a todas las zonas». "
                            "El departamento es opcional e informativo. "
                            "Al guardar se genera el link para copiar y enviar.",
         }),
@@ -74,6 +106,12 @@ class InvitacionRegistroAdmin(admin.ModelAdmin):
     @admin.display(description="Invitación")
     def descripcion_corta(self, obj):
         return obj.nota or (obj.email or f"#{obj.pk}")
+
+    @admin.display(description="Alcance")
+    def alcance(self, obj):
+        if obj.rol == Usuario.Rol.ADMIN or obj.acceso_nacional:
+            return "Todas las zonas"
+        return obj.zona or "—"
 
     @admin.display(description="Estado")
     def estado_badge(self, obj):

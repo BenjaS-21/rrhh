@@ -1,0 +1,62 @@
+{% comment %}
+Desplegable de tiendas con casillas. `<details>` se abre y cierra solo, sin JS.
+El resumen ("3 tiendas") lo pinta el servidor; el script lo actualiza en vivo
+mientras se marcan casillas, para no depender de recargar.
+{% endcomment %}
+<details class="multi" id="filtro-tiendas">
+  <summary data-todas="Todas las tiendas">{{ form.resumen_tiendas }}</summary>
+  <div class="multi__panel">
+    {% if form.fields.sedes.queryset %}
+      <div class="multi__acciones">
+        <button type="button" class="btn ghost chico" data-multi="todas">Marcar todas</button>
+        <button type="button" class="btn ghost chico" data-multi="ninguna">Limpiar</button>
+      </div>
+      {{ form.sedes }}
+    {% else %}
+      {# Un panel vacío no dice nada; el motivo sí, y es accionable. #}
+      <p class="pequeno mut mb0">{{ form.motivo_sin_tiendas }}</p>
+    {% endif %}
+  </div>
+</details>
+
+<script>
+  (function () {
+    var caja = document.getElementById("filtro-tiendas");
+    if (!caja || caja.dataset.listo) { return; }
+    caja.dataset.listo = "1";
+
+    var resumen = caja.querySelector("summary");
+    var todas = resumen.dataset.todas;
+
+    function casillas() {
+      return Array.prototype.slice.call(
+        caja.querySelectorAll('input[type=checkbox]'));
+    }
+
+    function actualizarResumen() {
+      var marcadas = casillas().filter(function (c) { return c.checked; });
+      if (marcadas.length === 0) { resumen.textContent = todas; }
+      else if (marcadas.length === 1) {
+        resumen.textContent = (marcadas[0].parentNode.textContent || "").trim();
+      } else { resumen.textContent = marcadas.length + " tiendas"; }
+    }
+
+    caja.addEventListener("change", actualizarResumen);
+
+    // Marcar todas / limpiar. Un solo 'change' al final: si no, se dispararía
+    // una búsqueda por cada casilla.
+    caja.addEventListener("click", function (e) {
+      var accion = e.target.dataset ? e.target.dataset.multi : null;
+      if (!accion) { return; }
+      e.preventDefault();
+      casillas().forEach(function (c) { c.checked = (accion === "todas"); });
+      actualizarResumen();
+      caja.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // Cerrar al hacer clic afuera.
+    document.addEventListener("click", function (e) {
+      if (caja.open && !caja.contains(e.target)) { caja.open = false; }
+    });
+  })();
+</script>

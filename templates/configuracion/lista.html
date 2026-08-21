@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}{{ cat.plural }} — Configuración{% endblock %}
+{% block titulo %}{{ cat.plural }} — Configuración — {{ sistema }}{% endblock %}
 
 {% block contenido %}
 <div class="pagina-header">
@@ -7,8 +7,41 @@
     <a href="{% url 'configuracion:index' %}" class="pequeno">← Configuración</a>
     <h1>{{ cat.icono }} {{ cat.plural }}</h1>
   </div>
-  <a class="btn" href="{% url 'configuracion:crear' slug %}">+ Nuevo</a>
+  <div class="flex wrap" style="gap:.5rem">
+    {% comment %}
+    Solo aparece si hay algo que pasar: un botón que no va a hacer nada es un
+    botón que hay que probar para enterarse. Dice cuántos son, porque el número
+    es lo que decide si conviene apretarlo o corregir uno a mano.
+    {% endcomment %}
+    {% if sin_mayusculas %}
+    <form method="post" action="{% url 'configuracion:mayusculas' slug %}"
+          onsubmit="return confirm('Se van a pasar a MAYÚSCULAS {{ sin_mayusculas }} nombre{{ sin_mayusculas|pluralize:"s" }} de {{ cat.plural|lower }}. ¿Seguimos?')">
+      {% csrf_token %}
+      <button class="btn sec" type="submit"
+              title="El catálogo de la empresa está todo en mayúsculas">
+        AA Pasar {{ sin_mayusculas }} a mayúsculas
+      </button>
+    </form>
+    {% endif %}
+    <a class="btn" href="{% url 'configuracion:crear' slug %}">+ Nuevo</a>
+  </div>
 </div>
+
+{% if cat.buscar %}
+<div class="card">
+  <form class="flex wrap" method="get" style="gap:.6rem">
+    <input class="input" type="search" name="q" value="{{ busqueda }}"
+           aria-label="Buscar" placeholder="Nombre o unidad organizativa">
+    <button class="btn" type="submit">Buscar</button>
+    {% if busqueda %}
+      <a class="btn sec" href="{% url 'configuracion:lista' slug %}">Ver todos</a>
+    {% endif %}
+  </form>
+  <p class="pequeno mut mb0">
+    {% if busqueda %}{{ filas|length }} de {{ total }}{% else %}{{ total }} en total{% endif %}
+  </p>
+</div>
+{% endif %}
 
 <div class="card">
   {% if filas %}
@@ -46,7 +79,14 @@
     </table>
   </div>
   {% else %}
-    <div class="vacio">Todavía no hay {{ cat.plural|lower }}. Creá el primero con “+ Nuevo”.</div>
+    {% if busqueda %}
+      <div class="vacio">
+        Ningún {{ cat.singular }} coincide con “{{ busqueda }}”.
+        <a href="{% url 'configuracion:lista' slug %}">Ver todos</a>.
+      </div>
+    {% else %}
+      <div class="vacio">Todavía no hay {{ cat.plural|lower }}. Creá el primero con “+ Nuevo”.</div>
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}

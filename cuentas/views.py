@@ -106,6 +106,7 @@ def registro(request, token):
         # El rol, la zona y el departamento los define la invitación, no el usuario.
         usuario.rol = invitacion.rol
         usuario.zona = invitacion.zona
+        usuario.acceso_nacional = invitacion.acceso_nacional
         usuario.departamento = invitacion.departamento
         usuario.save()
 

@@ -1,5 +1,5 @@
 """
-Configuración de Django para el Sistema de Expedientes de RRHH.
+Configuración de Django para GDE — Gestión Digital de Expedientes.
 
 Los valores sensibles se leen desde un archivo .env (ver .env.example).
 """
@@ -31,9 +31,22 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-solo-para-desarroll
 
 DEBUG = env_bool("DJANGO_DEBUG", True)
 
+# Un punto adelante ("`.aplicacionesdamasco.com`") vale para el dominio y para
+# todos sus subdominios. Hace falta porque el túnel de Cloudflare arma nombres
+# por máquina y por puerto —`6652-laptop.aplicacionesdamasco.com`— y cada equipo
+# nuevo generaría un `DisallowedHost` que hay que ir agregando a mano.
+DOMINIO_CORPORATIVO = ".aplicacionesdamasco.com"
+
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS") or ["127.0.0.1", "localhost"]
+if DOMINIO_CORPORATIVO not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(DOMINIO_CORPORATIVO)
 
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+# Sin esto, el host queda permitido pero cualquier formulario del subdominio
+# falla con "CSRF verification failed", que es más confuso todavía.
+_origen_corporativo = f"https://*{DOMINIO_CORPORATIVO}"
+if _origen_corporativo not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(_origen_corporativo)
 
 # URL base del sistema (para armar links absolutos de invitación). Ej:
 # http://192.168.1.50:8000  o  https://rrhh.empresa.local
@@ -84,6 +97,8 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Después de sesiones y mensajes: necesita poder dejar el aviso en pantalla.
+    "config.middleware.LimitarTamanoDeSubida",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -100,6 +115,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "config.context_processors.sistema",
             ],
         },
     },
@@ -111,6 +127,16 @@ WSGI_APPLICATION = "config.wsgi.application"
 # ---------------------------------------------------------------------------
 # Base de datos
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Identidad del sistema
+# ---------------------------------------------------------------------------
+# El nombre vive acá y llega a las plantillas por `config.context_processors`.
+# Está en un solo lugar para que no se desincronice entre la pestaña del
+# navegador, el pie, el admin de Django y los .bat.
+NOMBRE_SISTEMA = "GDE"
+NOMBRE_SISTEMA_LARGO = "Gestión Digital de Expedientes"
+
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -159,9 +185,25 @@ STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else 
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media-privado-no-usar/"
 
-# Límite de tamaño de carga por archivo (25 MB) antes de tocar disco.
-DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
-FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
+# Cuánto puede pesar un documento. Es el número que ve la persona en pantalla
+# y el que rechaza el servidor: si no coinciden, alguien sube 80 MB por la
+# conexión de la tienda para que recién al final le digan que no.
+DOCUMENTOS_MAX_BYTES = 20 * 1024 * 1024
+
+# Cuánto se admite recibir en total, ya con el sobre del formulario. El margen
+# es para los otros campos y los límites de multipart.
+SUBIDA_MAX_BYTES = DOCUMENTOS_MAX_BYTES + 5 * 1024 * 1024
+
+# Los datos que NO son archivo (los campos del formulario) siguen acotados.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+
+# A partir de acá el archivo subido se escribe en un temporal en vez de quedar
+# en RAM. Estaba en 25 MB: cada subida se reservaba eso de memoria antes de
+# empezar a cifrar, y con varias a la vez el servidor se quedaba sin aire.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+
+# El escáner manda una foto por hoja; `expedientes.escaner` limita a 30.
+DATA_UPLOAD_MAX_NUMBER_FILES = 40
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -176,6 +218,12 @@ DOCUMENTOS_ENCRYPTION_KEY = os.getenv("DOCUMENTOS_ENCRYPTION_KEY", "")
 DOCUMENTOS_EXTENSIONES_PERMITIDAS = [
     ".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp",
 ]
+
+# ---------------------------------------------------------------------------
+# Plantillas Word de los documentos corporativos
+# ---------------------------------------------------------------------------
+# Las deja listas el comando: python manage.py preparar_plantillas
+PLANTILLAS_DIR = BASE_DIR / "plantillas"
 
 MESSAGE_TAGS = {
     10: "debug", 20: "info", 25: "success", 30: "warning", 40: "danger",

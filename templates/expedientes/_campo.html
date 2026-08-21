@@ -1,0 +1,34 @@
+{% comment %}
+Un campo de formulario con su etiqueta, ayuda y errores.
+Espera la variable `campo` en el contexto.
+
+`campo.pareja` son dos campos que comparten una casilla —el tipo de cédula y la
+cédula—: el primero angosto, el segundo ocupando lo que queda.
+{% endcomment %}
+{% if campo.pareja %}
+<div class="campo campo--pareja">
+  {% for uno in campo.pareja %}
+    <div class="campo__parte{% if forloop.first %} campo__parte--corta{% endif %}{% if uno.errors %} campo--mal{% endif %}">
+      <label for="{{ uno.id_for_label }}">{{ uno.label }}</label>
+      {{ uno }}
+      {% if uno.errors %}<div class="errores">{{ uno.errors|striptags }}</div>{% endif %}
+    </div>
+  {% endfor %}
+  {% for uno in campo.pareja %}
+    {% if uno.help_text %}<div class="ayuda">{{ uno.help_text }}</div>{% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<div class="campo{% if campo.errors %} campo--mal{% endif %}">
+  {% if campo.field.widget.input_type == "checkbox" %}
+    <label class="flex" style="gap:.5rem; cursor:pointer">
+      {{ campo }} <span>{{ campo.label }}</span>
+    </label>
+  {% else %}
+    <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+    {{ campo }}
+  {% endif %}
+  {% if campo.help_text %}<div class="ayuda">{{ campo.help_text }}</div>{% endif %}
+  {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+</div>
+{% endif %}

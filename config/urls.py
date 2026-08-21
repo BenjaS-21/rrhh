@@ -1,10 +1,11 @@
 """Rutas principales del proyecto."""
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
-admin.site.site_header = "Expedientes RRHH — Administración"
-admin.site.site_title = "Expedientes RRHH"
+admin.site.site_header = f"{settings.NOMBRE_SISTEMA} — Administración"
+admin.site.site_title = settings.NOMBRE_SISTEMA
 admin.site.index_title = "Panel de administración"
 
 urlpatterns = [

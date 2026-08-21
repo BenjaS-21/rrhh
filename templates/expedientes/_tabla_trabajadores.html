@@ -7,7 +7,7 @@
     <tbody>
       {% for t in pagina %}
       <tr onclick="window.location='{% url 'expedientes:trabajador_detail' t.pk %}'" style="cursor:pointer">
-        <td class="mut pequeno">{{ t.documento_identidad }}</td>
+        <td class="mut pequeno">{{ t.cedula_completa }}</td>
         <td><strong>{{ t.apellidos }}</strong>, {{ t.nombres }}</td>
         <td>{{ t.sede.nombre }} <span class="mut pequeno">· {{ t.sede.zona.nombre }}</span></td>
         <td>{{ t.puesto|default:"—" }}</td>
@@ -25,11 +25,11 @@
 {% if pagina.paginator.num_pages > 1 %}
 <div class="paginacion">
   {% if pagina.has_previous %}
-    <a class="btn sec chico" href="?page={{ pagina.previous_page_number }}">← Anterior</a>
+    <a class="btn sec chico" href="?page={{ pagina.previous_page_number }}{% if querystring %}&amp;{{ querystring }}{% endif %}">← Anterior</a>
   {% endif %}
   <span class="mut pequeno">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
   {% if pagina.has_next %}
-    <a class="btn sec chico" href="?page={{ pagina.next_page_number }}">Siguiente →</a>
+    <a class="btn sec chico" href="?page={{ pagina.next_page_number }}{% if querystring %}&amp;{{ querystring }}{% endif %}">Siguiente →</a>
   {% endif %}
 </div>
 {% endif %}

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block titulo %}{{ trabajador.nombre_completo }} — Expediente{% endblock %}
+{% load estaticos %}
+{% block titulo %}{{ trabajador.nombre_completo }} — Expediente — {{ sistema }}{% endblock %}
 
 {% block contenido %}
 <div class="pagina-header">
@@ -7,7 +8,7 @@
     <a href="{% url 'expedientes:trabajador_list' %}" class="pequeno">← Volver a expedientes</a>
     <h1>{{ trabajador.nombre_completo }}</h1>
     <div class="subtitulo">
-      {{ trabajador.documento_identidad }} ·
+      {{ trabajador.cedula_completa }} ·
       {{ trabajador.sede.nombre }} ({{ trabajador.sede.zona.nombre }})
       {% if trabajador.estado == "ACTIVO" %}<span class="badge verde">Activo</span>{% else %}<span class="badge gris">Baja</span>{% endif %}
     </div>
@@ -26,13 +27,17 @@
   <!-- Datos personales -->
   <div class="card">
     <h2>Datos del trabajador</h2>
-    <table class="datos">
-      <tr><th>Puesto</th><td>{{ trabajador.puesto|default:"—" }}</td></tr>
-      <tr><th>Email</th><td>{{ trabajador.email|default:"—" }}</td></tr>
-      <tr><th>Teléfono</th><td>{{ trabajador.telefono|default:"—" }}</td></tr>
-      <tr><th>Nacimiento</th><td>{{ trabajador.fecha_nacimiento|date:"d/m/Y"|default:"—" }}</td></tr>
-      <tr><th>Ingreso</th><td>{{ trabajador.fecha_ingreso|date:"d/m/Y"|default:"—" }}</td></tr>
-    </table>
+    <div class="tabla-scroll">
+      <table class="datos">
+        <tr><th>Cargo</th><td>{{ trabajador.puesto|default:"—" }}</td></tr>
+        <tr><th>Unidad</th><td>{{ trabajador.departamento|default:"—" }}</td></tr>
+        <tr><th>Email</th><td>{{ trabajador.email|default:"—" }}</td></tr>
+        <tr><th>Teléfono</th><td>{{ trabajador.telefono|default:"—" }}</td></tr>
+        <tr><th>Nacimiento</th><td>{{ trabajador.fecha_nacimiento|date:"d/m/Y"|default:"—" }}</td></tr>
+        <tr><th>Ingreso</th><td>{{ trabajador.fecha_ingreso|date:"d/m/Y"|default:"—" }}</td></tr>
+        <tr><th>Tallas</th><td>{{ trabajador.contratacion.tallas|default:"—" }}</td></tr>
+      </table>
+    </div>
   </div>
 
   <!-- Completitud -->
@@ -54,11 +59,185 @@
   </div>
 </div>
 
+{% include "expedientes/_hijos.html" %}
+
+{% if puede_pagos %}
+{# Solo Admin y RRHH Interior de la zona. Nada de esto se renderiza para Solo lectura. #}
+<div class="card">
+  <h2>Remuneración</h2>
+
+  {# Grilla: un ítem por cada concepto activo del catálogo. #}
+  <form method="post" action="{% url 'expedientes:remuneracion_guardar' trabajador.pk %}">
+    {% csrf_token %}
+    {% if form_remuneracion.filas %}
+      <div class="tabla-scroll">
+        <table class="datos">
+          <thead>
+            <tr><th>Concepto</th><th>Moneda</th><th style="width:190px">Monto</th></tr>
+          </thead>
+          <tbody>
+            {% for concepto, campo in form_remuneracion.filas %}
+            <tr>
+              <td>
+                <strong>{{ concepto.nombre }}</strong>
+                {% if concepto.descripcion %}
+                  <div class="pequeno mut">{{ concepto.descripcion }}</div>
+                {% endif %}
+              </td>
+              <td>
+                {{ concepto.moneda.simbolo }}
+                <span class="pequeno mut">({{ concepto.moneda.codigo }})</span>
+              </td>
+              <td>
+                {{ campo }}
+                {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="flex entre wrap" style="margin-top:.9rem">
+        <span class="pequeno mut">
+          Dejá vacío el monto de los conceptos que esta persona no cobra.
+        </span>
+        <button class="btn" type="submit">Guardar remuneración</button>
+      </div>
+    {% else %}
+      <div class="vacio">
+        Todavía no hay conceptos de pago.
+        <a href="{% url 'configuracion:lista' 'conceptos-pago' %}">Creálos en Configuración</a>
+        y van a aparecer acá como ítems para completar.
+      </div>
+    {% endif %}
+  </form>
+
+  <hr style="margin:1.4rem 0; border:0; border-top:1px solid #e5e5e5">
+
+  {# Bonos extras: los que no están en el catálogo, se cargan a mano. #}
+  <h3 style="margin-top:0">Bonos extras</h3>
+  <p class="pequeno mut">Pagos puntuales que no forman parte del catálogo.</p>
+
+  {% if extras %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead><tr><th>Nombre</th><th>Monto</th><th>Observaciones</th><th></th></tr></thead>
+      <tbody>
+        {% for p in extras %}
+        <tr>
+          <td><strong>{{ p.etiqueta }}</strong></td>
+          <td><strong>{{ p.monto_formateado }}</strong></td>
+          <td class="pequeno mut">{{ p.observaciones|default:"—" }}</td>
+          <td class="flex" style="gap:.35rem; justify-content:flex-end">
+            <a class="btn sec chico" href="{% url 'expedientes:pago_editar' p.pk %}">Editar</a>
+            {# Quitar es del Administrador: los demás roles corrigen el monto. #}
+            {% if user.puede_borrar %}
+            <form method="post" action="{% url 'expedientes:pago_borrar' p.pk %}"
+                  onsubmit="return confirm('¿Dar de baja «{{ p.etiqueta|escapejs }}»?')">
+              {% csrf_token %}
+              <button class="btn peligro chico" type="submit">Quitar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'expedientes:pago_agregar' trabajador.pk %}"
+        style="margin-top:1rem">
+    {% csrf_token %}
+    {% if form_extra.non_field_errors %}<div class="errores">{{ form_extra.non_field_errors }}</div>{% endif %}
+    <div class="grid-2">
+      {% for campo in form_extra %}
+        <div class="campo">
+          <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          {{ campo }}
+          {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    <button class="btn sec" type="submit">+ Agregar bono extra</button>
+  </form>
+
+  {% if totales_pagos %}
+  <hr style="margin:1.4rem 0; border:0; border-top:1px solid #e5e5e5">
+  <div class="flex wrap entre">
+    <span class="pequeno mut">Total por moneda</span>
+    <div class="flex wrap" style="gap:.4rem">
+      {% for t in totales_pagos %}
+        <span class="badge {% if t.moneda.es_nacional %}verde{% else %}amarillo{% endif %}">
+          {{ t.total }}
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+  <p class="pequeno mut" style="margin-top:.35rem">
+    Cada moneda se totaliza por separado: el sistema no convierte entre monedas.
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if puede_pagos %}
+{# Documentos corporativos: se arman con los datos ya cargados del expediente. #}
+<div class="card">
+  <div class="flex entre wrap">
+    <h2 style="margin:0">Documentos corporativos</h2>
+    <a class="btn sec chico" href="{% url 'expedientes:trabajador_update' trabajador.pk %}">
+      Completar datos
+    </a>
+  </div>
+  <p class="pequeno mut">
+    Se completan solos con los datos de este expediente.
+    <strong>Word</strong> para editarlo antes de firmar, <strong>PDF</strong>
+    para archivar o mandar, <strong>Imprimir</strong> para sacarlo en papel.
+    {% if not hay_pdf %}
+    <br>El PDF no está disponible: la máquina del servidor no tiene Word instalado.
+    {% endif %}
+  </p>
+
+  {% if campos_incompletos %}
+  <div class="flash warning" style="margin:.8rem 0">
+    <strong>Faltan datos.</strong> Estos campos van a salir en blanco, con el
+    lugar donde se completan:
+    <ul>
+      {% for c in campos_incompletos %}<li>{{ c }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="tabla-scroll">
+    <table class="datos">
+      <tbody>
+        {% for p in plantillas %}
+        <tr>
+          <td>{{ p.titulo }}</td>
+          <td style="text-align:right">
+            {% include "expedientes/_acciones_documento.html" %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- Subida de documentos -->
 {% if user.puede_editar %}
 <div class="card">
   <h2>Cargar / escanear documento</h2>
-  <form method="post" action="{% url 'expedientes:documento_subir' trabajador.pk %}" enctype="multipart/form-data">
+  {% comment %}
+  El tope viaja en el HTML para que el navegador pueda avisar ANTES de subir.
+  Sale de la misma constante que usa el servidor: si estuviera escrito a mano en
+  los dos lados, tarde o temprano dirían cosas distintas.
+  {% endcomment %}
+  <form method="post" id="subir-documento" data-max-bytes="{{ documento_max_bytes }}"
+        action="{% url 'expedientes:documento_subir' trabajador.pk %}"
+        enctype="multipart/form-data">
     {% csrf_token %}
     <div class="grid-2">
       <div class="campo">
@@ -68,7 +247,10 @@
       <div class="campo">
         <label for="{{ form_doc.archivo.id_for_label }}">Archivo (PDF o imagen)</label>
         {{ form_doc.archivo }}
-        <div class="ayuda">Podés escanear con el celular y subir la foto o el PDF.</div>
+        <div class="ayuda">
+          Podés escanear con el celular y subir la foto o el PDF.
+          Hasta {{ documento_max_mb }} MB por archivo.
+        </div>
       </div>
       <div class="campo">
         <label for="{{ form_doc.fecha_vencimiento.id_for_label }}">Vencimiento (si aplica)</label>
@@ -81,6 +263,8 @@
     </div>
     <button class="btn" type="submit">⬆ Subir documento</button>
   </form>
+
+  {% include "expedientes/_escaner.html" %}
 </div>
 {% endif %}
 
@@ -124,4 +308,16 @@
     <div class="vacio">Todavía no hay documentos cargados en este expediente.</div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {% if user.puede_editar %}
+    {% comment %}
+    Solo acá, y solo para quien puede cargar documentos. El módulo de imagen
+    va primero: `escaner.js` no arranca sin él.
+    {% endcomment %}
+    <script src="{% estatico 'js/escaner-imagen.js' %}" defer></script>
+    <script src="{% estatico 'js/escaner.js' %}" defer></script>
+    <script src="{% estatico 'js/subida.js' %}" defer></script>
+  {% endif %}
 {% endblock %}

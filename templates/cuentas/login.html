@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block titulo %}Ingresar — Expedientes RRHH{% endblock %}
+{% block titulo %}Ingresar — {{ sistema }}{% endblock %}
 {% block contenedor_clase %}login-wrap{% endblock %}
 
 {% block contenido %}
 <aside class="login-marca">
   <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
-  <h2>Expedientes del Personal</h2>
+  <h2>{{ sistema }} — {{ sistema_largo }}</h2>
   <p>Gestión segura y centralizada de los legajos de RRHH, para la sede central y las sucursales del interior.</p>
 </aside>
 

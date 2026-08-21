@@ -1,6 +1,6 @@
 /* ============================================================
    Damasco Design System 2.0 — Modo Claro
-   Aplicado al Sistema de Expedientes RRHH
+   Aplicado a GDE — Gestión Digital de Expedientes
    ============================================================ */
 
 /* ---- Tipografía Poppins (vendoreada localmente) ---- */
@@ -42,6 +42,13 @@
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* `hidden` tiene que ganarle a cualquier `display` de este archivo.
+   El navegador lo aplica con la prioridad más baja que existe, así que un
+   simple `.algo { display: flex }` lo pisa y el elemento queda visible aunque
+   diga `hidden`. Pasó con el panel del escáner: se abría solo al entrar al
+   expediente y el botón de cerrar no hacía nada, porque cerrar significa
+   poner `hidden` y el CSS lo ignoraba. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -69,6 +76,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 0 0 12px; }
   padding: 12px 24px;
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;   /* que desborde: es así como el script se entera */
   gap: 28px;
   box-shadow: var(--shadow-md);
 }
@@ -80,12 +88,50 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 0 0 12px; }
 .topbar nav a {
   color: rgba(255,255,255,.88); font-weight: 500; font-size: 15px;
   padding: 8px 14px; border-radius: var(--radius-sm);
+  white-space: nowrap;   /* una entrada no se parte en dos renglones */
 }
 .topbar nav a:hover { color: #fff; background: rgba(255,255,255,.14); text-decoration: none; }
 .topbar nav a.activo { color: #fff; background: rgba(0,0,0,.18); }
 .topbar .usuario { font-size: 13px; font-weight: 300; color: rgba(255,255,255,.85); text-align: right; }
 .topbar .usuario strong { color: #fff; display: block; font-weight: 600; }
 .topbar .usuario a { color: #fff; font-weight: 500; text-decoration: underline; }
+
+/* Menú detrás de un botón --------------------------------------------------
+   No depende de un ancho de pantalla sino de si las entradas entran: el script
+   de `base.html` mide y pone o saca la clase `compacto`. Un administrador ve
+   siete entradas y otro rol tres, así que el mismo ancho de pantalla no da el
+   mismo resultado para los dos. */
+.menu-check { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; }
+.menu-boton { display: none; }
+.menu-boton svg {
+  width: 20px; height: 20px; flex: none;
+  stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+}
+
+.topbar.compacto { flex-wrap: wrap; gap: 10px 14px; }
+.topbar.compacto .menu-boton {
+  display: inline-flex; align-items: center; gap: 8px;
+  order: 2; margin: 0 0 0 auto; cursor: pointer;
+  color: #fff; font-size: 15px; font-weight: 600;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(255,255,255,.45);
+  -webkit-tap-highlight-color: transparent;
+}
+.topbar.compacto .menu-boton:hover { background: rgba(255,255,255,.14); }
+/* La casilla está oculta pero sigue recibiendo foco: el menú también se abre
+   con el teclado. */
+.topbar.compacto .menu-check:focus-visible + .menu-boton {
+  outline: 2px solid #fff; outline-offset: 2px;
+}
+.topbar.compacto .usuario { order: 3; flex-basis: 100%; text-align: left; margin-left: 0; }
+.topbar.compacto nav { display: none; }
+.topbar.compacto .menu-check:checked ~ nav {
+  display: flex; flex-direction: column; align-items: stretch;
+  order: 4; flex-basis: 100%; flex-grow: 0; gap: 2px;
+  margin: 2px 0 4px; padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.25);
+}
+.topbar.compacto nav a { padding: 11px 12px; }
 
 .contenedor { max-width: 1120px; margin: 24px auto; padding: 0 24px; }
 
@@ -154,8 +200,11 @@ label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 6px; }
 .campo { margin-bottom: 16px; }
 .ayuda { font-size: 13px; font-weight: 300; color: var(--muted); margin-top: 5px; }
 .errores { color: var(--destructive); font-size: 13px; margin-top: 5px; font-weight: 500; }
+/* El campo que falló, marcado. Al llegar desde la lista de arriba hay que
+   poder ver de un vistazo cuál era, sin releer toda la tarjeta. */
+.campo--mal { border-left: 3px solid var(--destructive); padding-left: 10px; margin-left: -13px; }
+.campo--mal > label { color: var(--destructive); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 640px){ .grid-2 { grid-template-columns: 1fr; } }
 
 /* ============ Tablas ============ */
 table.datos { width: 100%; border-collapse: collapse; font-size: 15px; }
@@ -173,6 +222,10 @@ table.datos tbody tr:hover td { background: rgba(225,5,45,.04); }
 .badge.gris { background: var(--surface-alt); color: var(--muted); }
 .badge.azul { background: rgba(225,5,45,.10); color: var(--primary-red); }
 
+/* El semáforo de datos de la nómina: el porcentaje y el "faltan N" van juntos
+   en un renglón, si no el número queda colgado abajo del globito. */
+.nowrap { white-space: nowrap; }
+
 /* ============ Métricas ============ */
 .metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: 16px; }
 .metrica {
@@ -187,12 +240,55 @@ table.datos tbody tr:hover td { background: rgba(225,5,45,.04); }
 .metrica.aviso::before { background: var(--warning); }
 .metrica.aviso .num { color: var(--warning); }
 
+/* Tarjetas de Configuración. No usan .metrica: ahí el texto grande es un
+   número corto, y un nombre como "Departamentos" se salía de la tarjeta. */
+.catalogos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 16px; }
+.catalogo {
+  background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+}
+.catalogo::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--primary-red); }
+.catalogo__icono { font-size: 26px; line-height: 1; }
+.catalogo__nombre {
+  font-size: 20px; font-weight: 700; color: var(--foreground); line-height: 1.2;
+  text-decoration: none; overflow-wrap: anywhere;
+}
+.catalogo__nombre:hover { color: var(--primary-red); }
+.catalogo__dato { color: var(--muted); font-size: 14px; font-weight: 300; }
+.catalogo .btn { margin-top: 6px; }
+/* Los dos destinos de la tarjeta, uno al lado del otro. En el telefono no
+   entran en una linea, asi que bajan en vez de encogerse y cortar el texto. */
+.catalogo__acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.catalogo__acciones .btn { margin-top: 0; }
+
+/* Dos campos en una casilla: el tipo de cedula y la cedula.
+   El tipo es una letra, asi que se le da lo justo y el numero se queda con el
+   resto. En el telefono bajan uno debajo del otro. */
+.campo--pareja { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); gap: 10px; align-items: start; }
+.campo--pareja .ayuda { grid-column: 1 / -1; }
+.campo__parte { display: flex; flex-direction: column; min-width: 0; }
+@media (max-width: 480px) {
+  .campo--pareja { grid-template-columns: 1fr; }
+}
+
+/* Progreso de una subida. Aparece debajo del boton, dentro del formulario. */
+.subida { margin-top: 14px; display: grid; gap: 6px; }
+.subida__texto { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.subida__porcentaje { font-variant-numeric: tabular-nums; color: var(--muted); }
+.subida--mal .subida__estado { color: var(--destructive); }
+.subida--mal .barra > span { background: var(--destructive); }
+
 /* Barra de completitud */
 .barra { background: var(--border); border-radius: 999px; height: 10px; overflow: hidden; }
 .barra > span { display: block; height: 100%; background: var(--success); border-radius: 999px; }
 
 /* ============ Mensajes flash ============ */
-.flash { padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 15px; border: 1px solid; display: flex; gap: 8px; }
+/* En bloque, no en fila. Con `display: flex` cada hijo era una columna: el
+   aviso de "faltan datos" ponía la lista al costado del texto y la lista, que
+   no achica más allá de su palabra más larga, se salía de la pantalla. */
+.flash { padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 15px; border: 1px solid; }
+.flash ul { margin: .4rem 0 0; padding-left: 1.15rem; }
 .flash.success { background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.4); color: #15803d; }
 .flash.info { background: rgba(225,5,45,.06); border-color: rgba(225,5,45,.25); color: var(--corporate-red); }
 .flash.warning { background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.4); color: #b45309; }
@@ -200,7 +296,6 @@ table.datos tbody tr:hover td { background: rgba(225,5,45,.04); }
 
 /* ============ Login ============ */
 .login-wrap { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
-@media (max-width: 800px){ .login-wrap { grid-template-columns: 1fr; } .login-marca { display: none; } }
 .login-marca {
   background: var(--primary-red); color: #fff;
   display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
@@ -229,3 +324,338 @@ table.datos tbody tr:hover td { background: rgba(225,5,45,.04); }
 .footer { text-align: center; color: var(--muted); font-size: 13px; font-weight: 300; padding: 24px; }
 .footer .logo-damasco { color: var(--muted); height: 15px; opacity: .5; vertical-align: middle; display: inline-block; }
 .footer .logo-damasco__slogan { display: none; }
+
+/* Desplegables con buscador ------------------------------------------------
+   Lo arma `buscable.js` encima de un `<select>` común. El select original
+   sigue ahí adentro: es el que se envía y el que valida el navegador. */
+.buscable { position: relative; }
+.buscable__valor {
+  width: 100%; text-align: left; cursor: pointer;
+  padding: 10px 32px 10px 12px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: #fff; font-size: 15px; font-family: inherit;
+  color: var(--foreground); font-weight: 400;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.buscable__valor::after {
+  content: "▾"; position: absolute; right: 12px; top: 50%;
+  transform: translateY(-50%); color: var(--muted); pointer-events: none;
+}
+.buscable__valor--vacio { color: var(--muted); }
+.buscable__valor:focus-visible {
+  outline: none; border-color: var(--primary-red);
+  box-shadow: 0 0 0 3px rgba(225,5,45,.14);
+}
+.buscable[data-abierto] .buscable__valor { border-color: var(--primary-red); }
+
+/* Invisible pero presente: si se lo sacara con `display: none`, el navegador
+   no podría avisar "elegí una opción" en un campo obligatorio —se niega a
+   señalar algo que no está en pantalla— y el formulario no se enviaría nunca,
+   sin decir por qué. */
+.buscable__real {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  opacity: 0; pointer-events: none; z-index: -1;
+}
+
+.buscable__panel {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
+  min-width: 240px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+/* Abierto hacia arriba, cuando abajo no hay lugar. */
+.buscable--arriba .buscable__panel { top: auto; bottom: calc(100% + 4px); }
+
+.buscable__buscar {
+  width: 100%; padding: 8px 10px; font-size: 15px; font-family: inherit;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+.buscable__buscar:focus {
+  outline: none; border-color: var(--primary-red);
+  box-shadow: 0 0 0 3px rgba(225,5,45,.14);
+}
+.buscable__lista {
+  list-style: none; margin: 0; padding: 0;
+  /* Estaba en 240px: con opciones de 41px entraban SEIS. Con 85 unidades
+     organizativas cargadas, abrir el desplegable y ver seis se leia como que
+     el sistema no tenia el resto. Ahora entran unas diez, y en el telefono se
+     usa el alto de la pantalla en vez de un numero fijo. */
+  max-height: min(58vh, 420px); overflow-y: auto;
+  /* Que el tironeo dentro de la lista no arrastre la pagina de atras cuando
+     se llega al final: en el telefono es lo que hace que parezca trabada. */
+  overscroll-behavior: contain;
+}
+/* Renglon con el total, arriba de la lista. */
+.buscable__cuenta {
+  margin: 0 4px 6px; font-size: 12px; color: var(--muted);
+}
+.buscable__opcion {
+  padding: 9px 10px; border-radius: 6px; cursor: pointer; font-size: 15px;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.buscable__opcion--marcada { background: var(--surface-alt); }
+.buscable__opcion--elegida { font-weight: 600; color: var(--primary-red); }
+.buscable__grupo { font-size: 12px; color: var(--muted); margin-left: auto; }
+.buscable__nada { margin: 6px 4px 2px; font-size: 14px; color: var(--muted); }
+
+/* Filtro desplegable con casillas (tiendas) ------------------------------- */
+.multi { position: relative; }
+.multi > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  /* La flechita se ancla acá, no en `.multi`: en pantallas chicas `.multi`
+     deja de estar posicionado y la flecha se iba al borde de la pantalla. */
+  position: relative;
+  padding: 10px 32px 10px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface);
+  font-size: 15px; white-space: nowrap;
+}
+.multi > summary::-webkit-details-marker { display: none; }
+.multi > summary::after {
+  content: "▾"; position: absolute; right: 12px; top: 50%;
+  transform: translateY(-50%); color: var(--muted); pointer-events: none;
+}
+.multi[open] > summary { border-color: var(--primary-red); }
+.multi[open] > summary::after { content: "▴"; }
+.multi__panel {
+  position: absolute; z-index: 20; top: calc(100% + 4px); left: 0;
+  min-width: 260px; max-height: 320px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.10);
+}
+.multi__acciones {
+  display: flex; gap: 4px; margin-bottom: 6px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.multi__panel label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 4px; border-radius: 6px; cursor: pointer;
+  font-size: 14px; font-weight: 400; white-space: nowrap;
+}
+.multi__panel label:hover { background: var(--surface-alt); }
+.multi__panel input[type=checkbox] { width: auto; margin: 0; accent-color: var(--primary-red); }
+
+/* Botones con icono de los documentos corporativos ------------------------ */
+.acciones-doc { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.acciones-doc .btn { display: inline-flex; align-items: center; gap: 6px; }
+.acciones-doc svg {
+  width: 15px; height: 15px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+/* Escáner con la cámara del teléfono -------------------------------------- */
+.escaner__icono {
+  width: 18px; height: 18px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+#escaner { margin-top: 14px; }
+#escaner > .btn { width: 100%; justify-content: center; }
+
+/* Ocupa la pantalla entera: con la hoja en una mano y el teléfono en la otra,
+   cualquier cosa alrededor se toca sin querer.
+   La altura va en `dvh` y no en `vh`: en el teléfono la barra del navegador se
+   esconde al bajar, y `vh` se queda con la medida vieja. Eso dejaba una franja
+   blanca abajo del panel. `vh` queda de respaldo para los navegadores viejos. */
+.escaner__panel {
+  position: fixed; inset: 0; z-index: 100;
+  height: 100vh;
+  height: 100dvh;
+  background: #101010; color: #fff;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+/* Paso 1 —sacar las hojas— ocupa lo que queda de alto, y el visor se estira
+   para llenarlo. Así nada se corta ni sobra: el panel entra justo, sea cual sea
+   el teléfono. */
+#escaner-captura {
+  display: flex; flex-direction: column; gap: 10px;
+  flex: 1 1 auto; min-height: 0;
+}
+/* Paso 2 es un formulario: si no entra, que scrollee él y no el panel. */
+#escaner-guardar { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.escaner__barra { display: flex; align-items: center; justify-content: space-between; }
+.escaner__cerrar {
+  background: none; border: 0; color: #fff; font-size: 30px; line-height: 1;
+  cursor: pointer; padding: 0 6px;
+}
+.escaner__aviso {
+  margin: 0; padding: 9px 12px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.12); font-size: 14px;
+}
+.escaner__aviso--error { background: rgba(239,68,68,.22); }
+
+/* `cover` y no `contain`: con `contain` la imagen quedaba flotando entre dos
+   franjas negras y el marco guía caía sobre el negro, no sobre lo que ve la
+   cámara. Encuadrar dentro de las rayas no servía de nada. Llenando el visor,
+   lo que está adentro del marco es exactamente lo que se va a recortar. */
+.escaner__visor {
+  position: relative; flex: 1 1 auto; min-height: 150px;
+  background: #000; border-radius: var(--radius); overflow: hidden;
+}
+.escaner__visor video { width: 100%; height: 100%; display: block; object-fit: cover; }
+/* El recuadro es el recorte: lo que queda adentro es lo que se guarda. Se
+   arrastra para moverlo y se estira desde las esquinas, así que sí recibe
+   toques. La sombra de afuera muestra qué se va a descartar. */
+.escaner__guia {
+  position: absolute;
+  border: 2px solid rgba(255,255,255,.9); border-radius: 4px;
+  box-shadow: 0 0 0 4000px rgba(0,0,0,.45);
+  cursor: move; touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.escaner__tirador {
+  position: absolute; width: 34px; height: 34px;
+  touch-action: none;
+}
+/* La marca es chica; la zona que responde al dedo, grande. */
+.escaner__tirador::after {
+  content: ""; position: absolute; width: 18px; height: 18px;
+  border: 3px solid #fff;
+}
+/* Verde mientras la cámara busca la hoja sola. El movimiento no se suaviza
+   acá: el recuadro se acerca de a poco a lo detectado desde el JavaScript, y
+   encimarle una transición de CSS solo agregaría retraso —dos mecanismos
+   haciendo lo mismo, uno atrás del otro—. */
+.escaner__guia--auto { border-color: var(--success); }
+
+.escaner__auto { white-space: nowrap; }
+.escaner__auto--prendido {
+  background: rgba(34,197,94,.18); border-color: var(--success); color: #fff;
+}
+.escaner__auto--prendido:hover { background: rgba(34,197,94,.3); }
+
+/* Van para adentro del recuadro. Afuera se los come el borde del visor apenas
+   uno arrima el recorte a un costado, que es justo cuando hacen falta. */
+.escaner__tirador[data-esquina="ni"] { top: 0; left: 0; cursor: nwse-resize; }
+.escaner__tirador[data-esquina="nd"] { top: 0; right: 0; cursor: nesw-resize; }
+.escaner__tirador[data-esquina="si"] { bottom: 0; left: 0; cursor: nesw-resize; }
+.escaner__tirador[data-esquina="sd"] { bottom: 0; right: 0; cursor: nwse-resize; }
+.escaner__tirador[data-esquina="ni"]::after { top: 3px; left: 3px; border-width: 3px 0 0 3px; }
+.escaner__tirador[data-esquina="nd"]::after { top: 3px; right: 3px; border-width: 3px 3px 0 0; }
+.escaner__tirador[data-esquina="si"]::after { bottom: 3px; left: 3px; border-width: 0 0 3px 3px; }
+.escaner__tirador[data-esquina="sd"]::after { bottom: 3px; right: 3px; border-width: 0 3px 3px 0; }
+
+.escaner__hojas { display: flex; gap: 10px; overflow-x: auto; flex: none; }
+.escaner__hoja { position: relative; flex: none; }
+.escaner__hoja img {
+  height: 76px; width: auto; border-radius: 6px; background: #fff;
+  border: 1px solid rgba(255,255,255,.3); display: block;
+}
+/* La × va adentro de la miniatura. Afuera se la comía el recorte de la tira
+   —la tira scrollea a lo ancho, así que todo lo que sobresale se corta— y
+   además caía al lado de la miniatura siguiente, como si fuera de esa. */
+.escaner__quitar {
+  position: absolute; top: 3px; right: 3px;
+  width: 21px; height: 21px; border-radius: 50%;
+  background: var(--destructive); color: #fff; border: 0;
+  font-size: 14px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.35);
+}
+
+.escaner__pie { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.escaner__conteo { font-size: 14px; color: rgba(255,255,255,.8); }
+.escaner__acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+.escaner__acciones .btn { flex: 1 1 auto; justify-content: center; }
+.escaner__nota { font-size: 13px; color: rgba(255,255,255,.65); margin: 0; }
+
+.escaner__panel label { color: #fff; }
+.escaner__panel .campo { margin-bottom: 12px; }
+
+/* Con el escáner abierto, el fondo no se mueve detrás.
+   `overflow: hidden` solo no alcanza en el teléfono: el dedo igual arrastra la
+   página y, al cerrar, el expediente aparecía arriba de todo. Se lo saca del
+   flujo y el script guarda a qué altura estaba (`top: -Npx`) para devolverlo
+   ahí mismo. */
+body.sin-scroll {
+  position: fixed;
+  left: 0; right: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+
+/* ============================================================
+   Responsive
+   ============================================================
+   Tres cortes:
+     1024px  notebooks chicas y tablets apaisadas -> menos aire lateral
+      900px  tablet vertical -> el menú pasa a su propia línea
+      640px  teléfono -> una sola columna y tipografía más compacta
+
+   Regla general de este archivo: nada de anchos fijos en píxeles para
+   contenido; lo que no entra, se envuelve o se desliza dentro de su caja
+   (`.tabla-scroll`), nunca haciendo que se deslice la página entera.
+   ============================================================ */
+
+@media (max-width: 1024px) {
+  .contenedor { margin: 20px auto; padding: 0 18px; }
+  .topbar { padding: 12px 18px; gap: 18px; }
+}
+
+@media (max-width: 800px) {
+  /* La franja de marca del login no se esconde: se achica. Sin ella, la
+     pantalla de ingreso queda sin ninguna referencia de dónde entraste. */
+  .login-wrap { grid-template-columns: 1fr; min-height: 100%; }
+  .login-marca {
+    display: flex; flex-direction: row; align-items: center; flex-wrap: wrap;
+    padding: 20px 24px; gap: 12px;
+  }
+  .login-marca .logo-damasco { height: 30px; }
+  .login-marca h2 { font-size: 17px; margin: 0; }
+  .login-marca p { display: none; }
+  .login-form-side { padding: 28px 18px; align-items: start; }
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  .grid-2 { grid-template-columns: 1fr; }
+  h2 { font-size: 19px; }
+
+  .contenedor { margin: 14px auto; padding: 0 14px; }
+  .card { padding: 16px; margin-bottom: 16px; }
+
+  .topbar { padding: 10px 14px; }
+  .topbar .marca .logo-damasco { height: 24px; }
+  .topbar .usuario { font-size: 12px; line-height: 1.35; }
+
+  /* El botón de acción de cada pantalla ocupa el ancho: en un teléfono es más
+     fácil de acertar que un botón chico arrinconado. */
+  .pagina-header { flex-direction: column; align-items: stretch; }
+  .pagina-header > .btn { width: 100%; justify-content: center; }
+
+  /* Los inputs a 16px evitan que iOS haga zoom solo al tocarlos, que después
+     deja la pantalla corrida y hay que volver a acomodarla a mano. */
+  .input, .select, textarea, select,
+  input[type=text], input[type=password], input[type=email],
+  input[type=date], input[type=file] { font-size: 16px; }
+
+  table.datos { font-size: 14px; }
+  table.datos th, table.datos td { padding: 10px; }
+
+  /* El desplegable de tiendas deja de flotar: abre hacia abajo, empujando el
+     contenido. Flotando se salía por el borde derecho de la pantalla. */
+  .multi { position: static; width: 100%; }
+  .multi > summary { white-space: normal; }
+  .multi__panel {
+    position: static; width: 100%; min-width: 0; max-height: 260px;
+    margin-top: 6px; box-shadow: none;
+  }
+  .multi__panel label { white-space: normal; }
+
+  .acciones-doc { justify-content: stretch; }
+  .acciones-doc .btn { flex: 1 1 auto; justify-content: center; }
+
+  .metricas { grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; }
+  .metrica { padding: 16px; }
+  .metrica .num { font-size: 27px; }
+  .catalogos { grid-template-columns: 1fr; gap: 12px; }
+
+  .paginacion { flex-wrap: wrap; }
+  .footer { padding: 18px 14px; }
+}

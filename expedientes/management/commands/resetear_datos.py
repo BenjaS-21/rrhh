@@ -9,9 +9,9 @@ Se CONSERVA:
     - Los usuarios administradores (superusuarios o rol ADMIN).
 
 Se BORRA:
-    - Trabajadores y sus documentos.
+    - Trabajadores, sus documentos y sus montos de remuneración.
     - Invitaciones de registro.
-    - Áreas, Tiendas (sedes), Zonas.
+    - Áreas, Cargos, Tiendas (sedes), Zonas.
     - Tipos de documento.
     - Registros de auditoría.
     - Usuarios NO administradores.
@@ -26,8 +26,12 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Q
 
-from cuentas.models import Area, Departamento, Sede, Zona, InvitacionRegistro
-from expedientes.models import Documento, RegistroAuditoria, TipoDocumento, Trabajador
+from cuentas.models import (
+    Area, Cargo, Departamento, InvitacionRegistro, Sede, Zona,
+)
+from expedientes.models import (
+    AsignacionPago, Documento, RegistroAuditoria, TipoDocumento, Trabajador,
+)
 
 Usuario = get_user_model()
 
@@ -81,6 +85,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             # Orden por dependencias (primero lo que apunta a otros).
             n_docs = Documento.objects.all().delete()[0]
+            n_pagos = AsignacionPago.objects.all().delete()[0]
             n_trab = Trabajador.objects.all().delete()[0]
             n_aud = RegistroAuditoria.objects.all().delete()[0]
             n_inv = InvitacionRegistro.objects.all().delete()[0]
@@ -92,6 +97,9 @@ class Command(BaseCommand):
             n_sede = Sede.objects.all().delete()[0]
             n_zona = Zona.objects.all().delete()[0]
             n_tipo = TipoDocumento.objects.all().delete()[0]
+            # Los cargos cuelgan del departamento y se irían en cascada: se
+            # cuentan antes para que el resumen no los oculte.
+            n_cargo = Cargo.objects.count()
             n_dep = Departamento.objects.all().delete()[0]
 
             # Crear los departamentos.
@@ -101,9 +109,15 @@ class Command(BaseCommand):
                 creados += 1 if nuevo else 0
 
         self.stdout.write(self.style.SUCCESS("\n¡Listo! Resumen:"))
-        self.stdout.write(f"   Borrados -> documentos: {n_docs}, trabajadores: {n_trab}, "
+        self.stdout.write(f"   Borrados -> documentos: {n_docs}, montos: {n_pagos}, "
+                          f"trabajadores: {n_trab}, "
                           f"invitaciones: {n_inv}, áreas: {n_area}, tiendas: {n_sede}, "
                           f"zonas: {n_zona}, tipos doc: {n_tipo}, auditoría: {n_aud}, "
-                          f"usuarios no admin: {n_users}, departamentos previos: {n_dep}")
+                          f"usuarios no admin: {n_users}, departamentos previos: {n_dep}, "
+                          f"cargos: {n_cargo}")
+        if n_cargo:
+            self.stdout.write(self.style.WARNING(
+                "   Se borraron las tiendas y los cargos de Damasco. "
+                "Para volver a cargarlos: cargar_datos.bat"))
         self.stdout.write(f"   Departamentos creados: {creados}")
         self.stdout.write(f"   Administradores conservados: {len(admin_ids)}")

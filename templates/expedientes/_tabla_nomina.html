@@ -1,18 +1,34 @@
+{% if parcial %}
+<div class="subtitulo" id="resumen-nomina" hx-swap-oob="true">
+  {% include "expedientes/_resumen_nomina.html" %}
+</div>
+{% endif %}
 {% if pagina.object_list %}
 <div class="tabla-scroll">
   <table class="datos">
     <thead>
-      <tr><th>C.I.</th><th>Apellidos</th><th>Nombres</th><th>Cargo</th><th>Departamento</th><th>Tienda</th></tr>
+      <tr><th>C.I.</th><th>Apellidos</th><th>Nombres</th><th>Cargo</th><th>Departamento</th><th>Tienda</th><th>Datos</th></tr>
     </thead>
     <tbody>
       {% for t in pagina %}
       <tr onclick="window.location='{% url 'expedientes:trabajador_detail' t.pk %}'" style="cursor:pointer">
-        <td class="mut pequeno">{{ t.documento_identidad }}</td>
+        <td class="mut pequeno">{{ t.cedula_completa }}</td>
         <td><strong>{{ t.apellidos }}</strong></td>
         <td>{{ t.nombres }}</td>
         <td>{{ t.puesto|default:"—" }}</td>
         <td>{% if t.departamento %}<span class="badge azul">{{ t.departamento }}</span>{% else %}<span class="mut">—</span>{% endif %}</td>
         <td>{{ t.sede.nombre }} <span class="mut pequeno">· {{ t.sede.zona.nombre }}</span></td>
+        {% comment %}
+        Semáforo de lo que va al Excel. El `title` dice qué falta: un color
+        solo avisa que hay un problema, no qué hay que hacer.
+        {% endcomment %}
+        <td class="nowrap">
+          <span class="badge {% if t.completitud.nivel == 'completo' %}verde{% elif t.completitud.nivel == 'parcial' %}amarillo{% else %}rojo{% endif %}"
+                title="{{ t.completitud.detalle }}">{{ t.completitud.porcentaje }}%</span>
+          {% if t.completitud.faltan %}
+            <span class="mut pequeno">falta{{ t.completitud.faltan|length|pluralize:"n" }} {{ t.completitud.faltan|length }}</span>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -22,11 +38,11 @@
 {% if pagina.paginator.num_pages > 1 %}
 <div class="paginacion">
   {% if pagina.has_previous %}
-    <a class="btn sec chico" href="?page={{ pagina.previous_page_number }}">← Anterior</a>
+    <a class="btn sec chico" href="?page={{ pagina.previous_page_number }}{% if querystring %}&amp;{{ querystring }}{% endif %}">← Anterior</a>
   {% endif %}
   <span class="mut pequeno">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
   {% if pagina.has_next %}
-    <a class="btn sec chico" href="?page={{ pagina.next_page_number }}">Siguiente →</a>
+    <a class="btn sec chico" href="?page={{ pagina.next_page_number }}{% if querystring %}&amp;{{ querystring }}{% endif %}">Siguiente →</a>
   {% endif %}
 </div>
 {% endif %}

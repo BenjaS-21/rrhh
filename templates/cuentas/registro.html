@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block titulo %}Crear cuenta — Expedientes RRHH{% endblock %}
+{% block titulo %}Crear cuenta — {{ sistema }}{% endblock %}
 {% block contenedor_clase %}login-wrap{% endblock %}
 
 {% block contenido %}
 <aside class="login-marca">
   <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
   <h2>Creá tu cuenta</h2>
-  <p>Fuiste invitado/a al Sistema de Expedientes de RRHH. Completá tus datos para acceder.</p>
+  <p>Fuiste invitado/a a {{ sistema }} ({{ sistema_largo }}). Completá tus datos para acceder.</p>
 </aside>
 
 <section class="login-form-side">

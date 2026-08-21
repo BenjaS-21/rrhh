@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block titulo %}Opciones del sistema — Configuración — {{ sistema }}{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'configuracion:index' %}" class="pequeno">← Configuración</a>
+    <h1>⚙️ Opciones del sistema</h1>
+    <div class="subtitulo">Valen para todos los usuarios.</div>
+  </div>
+</div>
+
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors }}</div>{% endif %}
+    {% for campo in form %}
+    <div class="campo">
+      <label for="{{ campo.id_for_label }}">{{ campo }} {{ campo.label }}</label>
+      {% if campo.help_text %}<div class="ayuda">{{ campo.help_text }}</div>{% endif %}
+      {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    <button class="btn" type="submit">Guardar</button>
+  </form>
+
+  <p class="pequeno mut" style="margin-top:1rem">
+    Para darle alcance nacional a una persona en particular —sin tocar esta
+    opción, que vale para todos— usá «Acceso a todas las zonas» en el usuario
+    o en su invitación.
+  </p>
+</div>
+{% endblock %}

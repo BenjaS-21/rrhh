@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titulo %}Expedientes — RRHH{% endblock %}
+{% block titulo %}Expedientes — {{ sistema }}{% endblock %}
 
 {% block contenido %}
 <div class="pagina-header">
@@ -18,12 +18,12 @@
   <form class="grid-2" method="get"
         hx-get="{% url 'expedientes:trabajador_list' %}"
         hx-target="#tabla-trabajadores"
-        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#id_sede, change from:#id_estado"
+        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_estado"
         hx-push-url="true"
         hx-indicator="#cargando">
     <div class="campo mb0">{{ form.q }}</div>
     <div class="flex" style="gap:.6rem">
-      {{ form.sede }}
+      {% include "expedientes/_filtro_tiendas.html" %}
       {{ form.estado }}
     </div>
   </form>

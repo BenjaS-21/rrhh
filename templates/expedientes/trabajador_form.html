@@ -1,32 +1,167 @@
 {% extends "base.html" %}
-{% block titulo %}{{ titulo }} — Expedientes RRHH{% endblock %}
+{% block titulo %}{{ titulo }} — {{ sistema }}{% endblock %}
+
+{% comment %}
+Una sola carga de datos: de acá salen la ficha, la nómina y los 5 documentos
+corporativos. Los campos que se calculan solos (edad, día/mes/año, dirección de
+la tienda, cuenta completa) NO se piden.
+
+Las secciones las arma `_secciones_expediente` en la vista.
+{% endcomment %}
 
 {% block contenido %}
 <div class="pagina-header">
   <div>
     <a href="{% url 'expedientes:trabajador_list' %}" class="pequeno">← Volver</a>
     <h1>{{ titulo }}</h1>
+    <div class="subtitulo">
+      Con estos datos se completan la nómina y los documentos corporativos.
+    </div>
   </div>
 </div>
 
-<div class="card" style="max-width:720px">
-  <form method="post">
-    {% csrf_token %}
-    {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors }}</div>{% endif %}
+<form method="post" style="max-width:860px">
+  {% csrf_token %}
+  {% comment %}
+  Todo lo que impidió guardar, junto y arriba. El formulario son cinco tarjetas
+  largas: sin esto, la página vuelve al principio y el aviso queda enterrado
+  tres pantallas más abajo, así que parece que Guardar no hizo nada.
+  {% endcomment %}
+  {% if problemas %}
+  <div class="flash danger">
+    <strong>No se guardó el expediente.</strong>
+    Revisá {{ problemas|length }} dato{{ problemas|length|pluralize:"s" }}:
+    <ul>
+      {% for p in problemas %}
+        <li>
+          {% if p.ancla %}
+            <a href="#{{ p.ancla }}">{{ p.etiqueta }}</a>
+            <span class="mut pequeno">· {{ p.seccion }}</span> —
+          {% endif %}
+          {{ p.mensaje }}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% for seccion in secciones %}
+  <div class="card">
+    <h2>{{ seccion.titulo }}</h2>
     <div class="grid-2">
-      {% for campo in form %}
-      <div class="campo">
-        <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-        {{ campo }}
-        {% if campo.help_text %}<div class="ayuda">{{ campo.help_text }}</div>{% endif %}
-        {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
-      </div>
+      {% for campo in seccion.campos %}
+        {% include "expedientes/_campo.html" %}
       {% endfor %}
     </div>
-    <div class="flex">
-      <button class="btn" type="submit">Guardar</button>
-      <a class="btn sec" href="{% url 'expedientes:trabajador_list' %}">Cancelar</a>
-    </div>
-  </form>
-</div>
+    {% if seccion.nota %}<p class="pequeno mut mb0">{{ seccion.nota }}</p>{% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="flex" style="margin-bottom:2rem">
+    <button class="btn" type="submit">Guardar</button>
+    <a class="btn sec" href="{% url 'expedientes:trabajador_list' %}">Cancelar</a>
+  </div>
+</form>
+
+{% comment %}
+Están SIEMPRE los 805 cargos, elijas la unidad que elijas.
+
+Antes se dejaban solo los de la unidad. El catálogo cuelga cada cargo de una
+unidad, pero eso es de dónde salió el nombre, no una regla: en una tienda
+trabaja gente con cargos que el catálogo tiene cargados bajo otra gerencia
+—mantenimiento, seguridad, sistemas—, y filtrando no había forma de
+registrarla. Además dejaba el campo vacío en las unidades sin cargos, y borraba
+sin aviso el cargo ya elegido al cambiar de unidad.
+
+Lo que sí hace la unidad es ORDENAR: sus cargos suben al principio de la lista,
+bajo un encabezado, y el resto queda abajo. Se ofrece todo y se propone lo
+probable.
+{% endcomment %}
+<script>
+  (function () {
+    var unidad = document.getElementById("id_departamento");
+    var cargo = document.getElementById("id_puesto");
+    if (!unidad || !cargo) { return; }
+
+    // Se guardan porque al reordenar se vacía el <select>: si solo se movieran
+    // los nodos, se perdería el `data-unidad` que dice de dónde es cada uno.
+    var todas = Array.prototype.slice.call(cargo.options).map(function (o) {
+      return { valor: o.value, texto: o.text, unidad: o.dataset.unidad || "" };
+    });
+    var vacia = todas[0];
+
+    function opcion(o) {
+      var e = document.createElement("option");
+      e.value = o.valor;
+      e.text = o.texto;
+      if (o.unidad) { e.dataset.unidad = o.unidad; }
+      return e;
+    }
+
+    function grupo(etiqueta, lista, destino) {
+      if (!lista.length) { return; }
+      var g = document.createElement("optgroup");
+      g.label = etiqueta;
+      lista.forEach(function (o) { g.appendChild(opcion(o)); });
+      destino.appendChild(g);
+    }
+
+    function ordenar() {
+      var elegida = unidad.value;
+      var antes = cargo.value;
+      var nombre = elegida ? unidad.options[unidad.selectedIndex].text : "";
+
+      cargo.innerHTML = "";
+      var primero = opcion(vacia);
+      primero.text = elegida ? "— Elegí el cargo —" : vacia.texto;
+      cargo.appendChild(primero);
+
+      var reales = todas.filter(function (o) { return o.valor; });
+      if (!elegida) {
+        reales.forEach(function (o) { cargo.appendChild(opcion(o)); });
+      } else {
+        var suyos = reales.filter(function (o) { return o.unidad === elegida; });
+        var resto = reales.filter(function (o) { return o.unidad !== elegida; });
+        grupo(nombre, suyos, cargo);
+        grupo(suyos.length ? "Otros cargos" : "Todos los cargos", resto, cargo);
+      }
+
+      // Lo ya elegido se respeta siempre: ahora ninguna opción desaparece.
+      cargo.value = antes;
+      if (cargo.selectedIndex < 0) { cargo.value = vacia.valor; }
+    }
+
+    unidad.addEventListener("change", ordenar);
+    ordenar();
+  })();
+</script>
+
+{# Al escribir la duración se propone la fecha de fin, y al revés. #}
+<script>
+  (function () {
+    var ingreso = document.getElementById("id_fecha_ingreso");
+    var dias = document.getElementById("id_contrato-duracion_dias");
+    var fin = document.getElementById("id_contrato-fecha_culminacion");
+    if (!ingreso || !dias || !fin) { return; }
+
+    function aFecha(v) { var d = new Date(v + "T00:00:00"); return isNaN(d) ? null : d; }
+    function aTexto(d) { return d.toISOString().slice(0, 10); }
+
+    dias.addEventListener("input", function () {
+      var base = aFecha(ingreso.value);
+      var n = parseInt(dias.value, 10);
+      if (base && n > 0) {
+        base.setDate(base.getDate() + n);
+        fin.value = aTexto(base);
+      }
+    });
+
+    fin.addEventListener("change", function () {
+      var base = aFecha(ingreso.value), hasta = aFecha(fin.value);
+      if (base && hasta) {
+        dias.value = Math.max(Math.round((hasta - base) / 86400000), 0);
+      }
+    });
+  })();
+</script>
 {% endblock %}

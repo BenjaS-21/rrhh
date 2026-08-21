@@ -101,12 +101,81 @@ class Area(models.Model):
         return f"{self.nombre} ({self.departamento})"
 
 
+class TipoDocumentoIdentidad(models.Model):
+    """La letra que va delante de la cédula: V, E, J, P…
+
+    Es un catálogo y no una lista fija en el código porque cambia sin avisar y
+    no siempre igual en todos lados: hoy son las venezolanas, mañana puede
+    hacer falta una para un caso que no vimos. Se administra desde el admin de
+    Django.
+
+    El código es lo que se imprime en los documentos, así que se guarda en
+    mayúsculas y sin puntos.
+    """
+
+    codigo = models.CharField(
+        "código", max_length=5, unique=True,
+        help_text="La letra que se antepone: V, E, J, P, G.",
+    )
+    nombre = models.CharField(
+        max_length=60, help_text="Cómo se lee: Venezolano, Extranjero…")
+    activo = models.BooleanField(default=True)
+    orden = models.PositiveIntegerField(
+        default=100, help_text="Menor primero en el desplegable.")
+
+    class Meta:
+        verbose_name = "tipo de cédula"
+        verbose_name_plural = "tipos de cédula"
+        ordering = ["orden", "codigo"]
+
+    def __str__(self):
+        return f"{self.codigo} — {self.nombre}"
+
+    def save(self, *args, **kwargs):
+        self.codigo = (self.codigo or "").strip().upper().replace(".", "")
+        super().save(*args, **kwargs)
+
+
+class Cargo(models.Model):
+    """Puesto que existe dentro de una unidad organizativa.
+
+    El mismo nombre se repite en varias unidades a propósito (ALMACENISTA
+    existe en casi todas las tiendas): así, al elegir la unidad, solo bajan los
+    cargos que de verdad corresponden a ella.
+    """
+
+    nombre = models.CharField(max_length=150)
+    departamento = models.ForeignKey(
+        Departamento, on_delete=models.CASCADE, related_name="cargos",
+        verbose_name="unidad organizativa",
+    )
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "cargo"
+        verbose_name_plural = "cargos"
+        ordering = ["departamento__nombre", "nombre"]
+        constraints = [
+            models.UniqueConstraint(fields=["nombre", "departamento"],
+                                    name="cargo_unico_por_unidad"),
+        ]
+
+    def __str__(self):
+        return self.nombre
+
+    @property
+    def etiqueta_completa(self):
+        return f"{self.nombre} — {self.departamento.nombre}"
+
+
 class Usuario(AbstractUser):
     """Usuario del sistema con rol y ámbito geográfico."""
 
     class Rol(models.TextChoices):
         ADMIN = "ADMIN", "Administrador (Sede Central)"
-        RRHH_INTERIOR = "RRHH_INTERIOR", "RRHH Interior (zona restringida)"
+        # El alcance ya no viene con el rol (lo define la zona o `acceso_nacional`),
+        # así que la etiqueta dice lo que el rol sí decide: qué puede hacer.
+        RRHH_INTERIOR = "RRHH_INTERIOR", "RRHH Interior (carga y edita)"
         SOLO_LECTURA = "SOLO_LECTURA", "Solo lectura"
 
     rol = models.CharField(
@@ -122,6 +191,13 @@ class Usuario(AbstractUser):
         related_name="usuarios",
         help_text="Zona a la que queda restringido un usuario de RRHH Interior. "
                   "Los administradores no necesitan zona (acceso nacional).",
+    )
+    acceso_nacional = models.BooleanField(
+        "acceso a todas las zonas",
+        default=False,
+        help_text="Para RRHH Interior o Solo lectura que trabajan con todo el país: "
+                  "ven las tiendas y los expedientes de todas las zonas. "
+                  "Con esto tildado la zona no hace falta.",
     )
     departamento = models.ForeignKey(
         Departamento,
@@ -166,7 +242,20 @@ class Usuario(AbstractUser):
 
     @property
     def alcance_nacional(self) -> bool:
-        return self.es_admin
+        """¿Ve todo el país? El Administrador siempre; los demás si se lo dieron.
+
+        Es un permiso que el Administrador otorga a mano, no el valor por
+        defecto: un usuario recién creado no ve nada hasta que se le asigna una
+        zona o este acceso.
+        """
+        return self.es_admin or self.acceso_nacional
+
+    @property
+    def descripcion_alcance(self) -> str:
+        """Lo que se muestra al lado del rol, para que nadie tenga que adivinar."""
+        if self.alcance_nacional:
+            return "Todas las zonas"
+        return str(self.zona) if self.zona_id else "Sin zona asignada"
 
 
 def _generar_token() -> str:
@@ -196,7 +285,14 @@ class InvitacionRegistro(models.Model):
     zona = models.ForeignKey(
         Zona, on_delete=models.CASCADE, null=True, blank=True,
         related_name="invitaciones",
-        help_text="Obligatoria para RRHH Interior y Solo lectura (define su alcance).",
+        help_text="Obligatoria para RRHH Interior y Solo lectura, salvo que se les "
+                  "dé acceso a todas las zonas.",
+    )
+    acceso_nacional = models.BooleanField(
+        "acceso a todas las zonas",
+        default=False,
+        help_text="La persona verá las tiendas y los expedientes de todo el país. "
+                  "Con esto tildado no hace falta elegir zona.",
     )
     departamento = models.ForeignKey(
         Departamento, on_delete=models.SET_NULL, null=True, blank=True,
@@ -230,7 +326,11 @@ class InvitacionRegistro(models.Model):
         ordering = ["-creada_en"]
 
     def __str__(self):
-        return f"Invitación {self.get_rol_display()}{f' · {self.zona}' if self.zona else ''}"
+        if self.acceso_nacional:
+            detalle = " · todas las zonas"
+        else:
+            detalle = f" · {self.zona}" if self.zona else ""
+        return f"Invitación {self.get_rol_display()}{detalle}"
 
     @property
     def esta_expirada(self) -> bool:

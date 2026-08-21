@@ -1,0 +1,102 @@
+{% comment %}
+Escáner con la cámara del teléfono.
+
+Todo arranca oculto (`hidden`): el script lo muestra solo si el aparato es un
+teléfono y tiene cámara. En una computadora ni aparece, porque ahí arrastrar el
+archivo al formulario de arriba es más rápido.
+
+Espera en el contexto: `trabajador` y `form_doc` (de donde salen los tipos).
+{% endcomment %}
+<div id="escaner" hidden
+     data-trabajador="{{ trabajador.pk }}"
+     data-url="{% url 'expedientes:documento_escanear' trabajador.pk %}"
+     data-csrf="{{ csrf_token }}">
+
+  <button type="button" class="btn sec" id="escaner-abrir">
+    <svg viewBox="0 0 24 24" aria-hidden="true" class="escaner__icono">
+      <path d="M4 8V6a2 2 0 0 1 2-2h2"/>
+      <path d="M16 4h2a2 2 0 0 1 2 2v2"/>
+      <path d="M20 16v2a2 2 0 0 1-2 2h-2"/>
+      <path d="M8 20H6a2 2 0 0 1-2-2v-2"/>
+      <circle cx="12" cy="12" r="3.2"/>
+    </svg>
+    Escanear con la cámara
+  </button>
+
+  <div class="escaner__panel" id="escaner-panel" hidden>
+    <div class="escaner__barra">
+      <strong>Escanear documento</strong>
+      <button type="button" class="escaner__cerrar" id="escaner-cerrar"
+              aria-label="Cerrar el escáner">×</button>
+    </div>
+
+    <p class="escaner__aviso" id="escaner-aviso" hidden></p>
+
+    {# Paso 1: sacar las hojas #}
+    <div id="escaner-captura">
+      {% comment %}
+      El recuadro no es un adorno: lo que queda adentro es exactamente lo que
+      se guarda. Se mueve arrastrándolo y se agranda desde las esquinas.
+      {% endcomment %}
+      <div class="escaner__visor">
+        <video id="escaner-video" playsinline muted></video>
+        <div class="escaner__guia" id="escaner-guia">
+          <span class="escaner__tirador" data-esquina="ni"></span>
+          <span class="escaner__tirador" data-esquina="nd"></span>
+          <span class="escaner__tirador" data-esquina="si"></span>
+          <span class="escaner__tirador" data-esquina="sd"></span>
+        </div>
+      </div>
+
+      <div class="escaner__hojas" id="escaner-hojas"></div>
+
+      <div class="escaner__pie">
+        <span class="escaner__conteo" id="escaner-conteo">Sin hojas todavía</span>
+        <button type="button" class="btn sec chico escaner__auto" id="escaner-auto"
+                aria-pressed="true">Detectando sola</button>
+      </div>
+      <div class="escaner__acciones">
+        <button type="button" class="btn" id="escaner-disparar">Tomar hoja</button>
+        <button type="button" class="btn sec" id="escaner-listo" disabled>Listo</button>
+      </div>
+      <p class="escaner__nota">
+        La cámara busca la hoja sola y el recuadro la sigue: se guarda lo que
+        quede adentro. Si no acierta, movelo con el dedo o estiralo desde las
+        esquinas —ahí deja de seguirla y manda lo que vos pusiste—. Las hojas
+        quedan guardadas acá hasta que las subas.
+      </p>
+    </div>
+
+    {# Paso 2: decir qué documento es y subirlo #}
+    <div id="escaner-guardar" hidden>
+      <div class="campo">
+        <label for="escaner-tipo">¿Qué documento es?</label>
+        <select id="escaner-tipo" class="select">
+          <option value="">— Elegí el tipo —</option>
+          {% for tipo in form_doc.fields.tipo.queryset %}
+            <option value="{{ tipo.pk }}">{{ tipo.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="escaner-nombre">Nombre del archivo</label>
+        <input type="text" id="escaner-nombre" class="input" maxlength="120"
+               placeholder="Cédula de Ana Alvarez" autocomplete="off">
+        <div class="ayuda">Se le agrega «.pdf» solo. Si lo dejás vacío se
+          nombra con el tipo de documento y la fecha.</div>
+      </div>
+      <div class="campo">
+        <label for="escaner-vence">Vencimiento (si aplica)</label>
+        <input type="date" id="escaner-vence" class="input">
+      </div>
+      <div class="campo">
+        <label for="escaner-obs">Observaciones</label>
+        <input type="text" id="escaner-obs" class="input" maxlength="255">
+      </div>
+      <div class="escaner__acciones">
+        <button type="button" class="btn sec" id="escaner-volver">← Seguir escaneando</button>
+        <button type="button" class="btn" id="escaner-subir">Guardar como PDF</button>
+      </div>
+    </div>
+  </div>
+</div>

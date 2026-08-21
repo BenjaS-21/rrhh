@@ -2,8 +2,10 @@
 
 from django import forms
 
-from cuentas.models import Area, Departamento, Sede, Zona
-from expedientes.models import TipoDocumento
+from cuentas.models import Area, Cargo, Departamento, Sede, Zona
+from expedientes.models import ConceptoPago, Moneda, TipoDocumento
+
+from .models import Preferencias
 
 
 class _BaseForm(forms.ModelForm):
@@ -34,6 +36,48 @@ class AreaForm(_BaseForm):
         self.fields["departamento"].queryset = Departamento.objects.filter(activo=True)
 
 
+class CargoForm(_BaseForm):
+    """Un cargo vive dentro de una unidad organizativa.
+
+    El mismo nombre se repite a propósito en varias unidades (ALMACENISTA está
+    en casi todas), así que lo único que no se admite es repetirlo DENTRO de la
+    misma unidad; de eso se encarga la restricción del modelo, y acá se traduce
+    a un mensaje que se entienda.
+    """
+
+    class Meta:
+        model = Cargo
+        fields = ["nombre", "departamento", "activo"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["departamento"].queryset = Departamento.objects.filter(activo=True)
+        self.fields["departamento"].label = "Unidad organizativa"
+
+    def clean_nombre(self):
+        # El catálogo real viene todo en mayúsculas: si se carga a mano en
+        # minúscula queda un duplicado que la restricción no llega a ver.
+        return (self.cleaned_data["nombre"] or "").strip().upper()
+
+    def validate_unique(self):
+        """Se reemplaza la verificación de Django para poder decir cuál cambiar.
+
+        La suya sale arriba de todo y dice «Ya existe un/a Cargo con este/a
+        Nombre y Unidad organizativa», que no señala ningún campo. La de acá
+        cuelga del nombre, que es el que hay que corregir. La restricción de la
+        base sigue estando: esto es el mensaje, no la garantía.
+        """
+        nombre = self.cleaned_data.get("nombre")
+        unidad = self.cleaned_data.get("departamento")
+        if not nombre or not unidad:
+            return
+        otros = Cargo.objects.filter(nombre=nombre, departamento=unidad)
+        if self.instance.pk:
+            otros = otros.exclude(pk=self.instance.pk)
+        if otros.exists():
+            self.add_error("nombre", f"{unidad} ya tiene un cargo con ese nombre.")
+
+
 class ZonaForm(_BaseForm):
     class Meta:
         model = Zona
@@ -55,3 +99,31 @@ class TipoDocumentoForm(_BaseForm):
         model = TipoDocumento
         fields = ["nombre", "descripcion", "obligatorio",
                   "requiere_vencimiento", "activo", "orden"]
+
+
+class MonedaForm(_BaseForm):
+    class Meta:
+        model = Moneda
+        fields = ["codigo", "nombre", "simbolo", "es_nacional", "activa", "orden"]
+
+    def clean_codigo(self):
+        return self.cleaned_data["codigo"].strip().upper()
+
+
+class ConceptoPagoForm(_BaseForm):
+    class Meta:
+        model = ConceptoPago
+        fields = ["nombre", "descripcion", "clase", "moneda", "activo", "orden"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["moneda"].queryset = Moneda.objects.filter(activa=True)
+        self.fields["moneda"].empty_label = None
+
+
+class PreferenciasForm(_BaseForm):
+    """Opciones globales. No es un catálogo: es una sola fila."""
+
+    class Meta:
+        model = Preferencias
+        fields = ["restringir_por_zona"]

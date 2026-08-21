@@ -7,6 +7,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.utils import timezone
 
 from .models import Departamento, InvitacionRegistro, Usuario, Zona
+from .widgets import FechaInput
 
 
 class RegistroForm(UserCreationForm):
@@ -37,19 +38,25 @@ class InvitacionForm(forms.ModelForm):
 
     class Meta:
         model = InvitacionRegistro
-        fields = ["rol", "zona", "departamento", "email", "nota", "expira_en"]
+        fields = ["rol", "acceso_nacional", "zona", "departamento", "email",
+                  "nota", "expira_en"]
         widgets = {
-            "expira_en": forms.DateInput(attrs={"type": "date"}),
+            "expira_en": FechaInput(),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["zona"].queryset = Zona.objects.filter(activa=True)
         self.fields["departamento"].queryset = Departamento.objects.filter(activo=True)
-        self.fields["zona"].help_text = "Requerida para RRHH Interior y Solo lectura."
+        self.fields["zona"].help_text = (
+            "Requerida para RRHH Interior y Solo lectura, salvo que les des "
+            "acceso a todas las zonas."
+        )
         if not self.instance.pk:
             self.fields["expira_en"].initial = timezone.localdate() + timedelta(days=7)
         for nombre, campo in self.fields.items():
+            if isinstance(campo.widget, forms.CheckboxInput):
+                continue          # la casilla no lleva la clase de los inputs
             css = "select" if isinstance(campo.widget, forms.Select) else "input"
             campo.widget.attrs.setdefault("class", css)
 
@@ -57,9 +64,20 @@ class InvitacionForm(forms.ModelForm):
         datos = super().clean()
         rol = datos.get("rol")
         zona = datos.get("zona")
-        if rol in (Usuario.Rol.RRHH_INTERIOR, Usuario.Rol.SOLO_LECTURA) and not zona:
-            self.add_error("zona", "Este rol requiere una zona (define su alcance).")
-        if rol == Usuario.Rol.ADMIN and zona:
-            # Un admin es nacional; no tiene sentido restringirlo a una zona.
+        nacional = datos.get("acceso_nacional")
+        if rol == Usuario.Rol.ADMIN:
+            # Un admin ya es nacional; no tiene sentido restringirlo a una zona.
             datos["zona"] = None
+            datos["acceso_nacional"] = False
+            return datos
+        if nacional:
+            # Con acceso a todo el país la zona sobra, y dejarla puesta haría
+            # creer que restringe algo.
+            datos["zona"] = None
+        elif not zona:
+            self.add_error(
+                "zona",
+                "Elegí una zona, o marcá «acceso a todas las zonas» si esta "
+                "persona trabaja con todo el país.",
+            )
         return datos

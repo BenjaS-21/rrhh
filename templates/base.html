@@ -1,20 +1,41 @@
-{% load static %}
+{% load static estaticos %}
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#e1052d">
-  <title>{% block titulo %}Expedientes RRHH — Damasco{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/estilos.css' %}">
+  <title>{% block titulo %}{{ sistema }} — Damasco{% endblock %}</title>
+  <link rel="stylesheet" href="{% estatico 'css/estilos.css' %}">
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
 </head>
 <body>
   {% if user.is_authenticated %}
-  <header class="topbar">
+  {% comment %}
+  La barra arranca en modo compacto —menú detrás del botón— y el script de abajo
+  la abre si el menú entra de verdad. Al revés (arrancar abierta y cerrarla) se
+  vería un instante el menú desbordado; y si el script no corre, quedarse con el
+  botón es la opción que siempre funciona.
+  {% endcomment %}
+  <header class="topbar compacto" id="topbar">
     <a class="marca" href="{% url 'expedientes:panel' %}" aria-label="Damasco — Inicio">
       <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
     </a>
+    {% comment %}
+    El desplegable no usa JavaScript: la casilla guarda si está abierto y el CSS
+    hace el resto. El script solo decide si hace falta el botón, no si el menú
+    se abre.
+    {% endcomment %}
+    <input type="checkbox" id="menu-check" class="menu-check" aria-label="Abrir el menú">
+    <label class="menu-boton" for="menu-check">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <line x1="4" y1="7" x2="20" y2="7"/>
+        <line x1="4" y1="12" x2="20" y2="12"/>
+        <line x1="4" y1="17" x2="20" y2="17"/>
+      </svg>
+      <span>Menú</span>
+    </label>
+
     <nav>
       <a href="{% url 'expedientes:panel' %}">Panel</a>
       <a href="{% url 'expedientes:trabajador_list' %}">Expedientes</a>
@@ -28,10 +49,68 @@
     </nav>
     <div class="usuario">
       <strong>{{ user.get_full_name|default:user.username }}</strong>
-      {{ user.get_rol_display }}{% if user.zona %} · {{ user.zona }}{% endif %}{% if user.departamento %} · {{ user.departamento }}{% endif %}
+      {{ user.get_rol_display }} · {{ user.descripcion_alcance }}{% if user.departamento %} · {{ user.departamento }}{% endif %}
       · <a href="{% url 'cuentas:logout' %}">Salir</a>
     </div>
   </header>
+
+  <script>
+    // ¿Entra el menú en una línea? No hay ancho fijo que sirva: depende del
+    // rol (un administrador ve siete entradas y otro rol tres), del idioma, de
+    // la tipografía y del zoom. Así que se mide.
+    (function () {
+      var barra = document.getElementById("topbar");
+      if (!barra) { return; }
+      var menu = barra.querySelector("nav");
+      var casilla = barra.querySelector(".menu-check");
+      if (!menu) { return; }
+
+      function acomodar() {
+        // Se prueba abierto y, si algo desborda, se vuelve al botón. Leer las
+        // medidas fuerza el cálculo pero no un repintado, así que no parpadea.
+        barra.classList.remove("compacto");
+        var desborda = menu.scrollWidth > menu.clientWidth + 1
+                    || barra.scrollWidth > barra.clientWidth + 1;
+        if (desborda) {
+          barra.classList.add("compacto");
+        } else if (casilla) {
+          // Al pasar a una pantalla ancha, el menú ya se ve entero: que no
+          // quede la casilla marcada de antes.
+          casilla.checked = false;
+        }
+      }
+
+      acomodar();
+
+      // Solo se remide cuando cambia el ANCHO. En el teléfono, esconder la
+      // barra del navegador al bajar dispara `resize` sin que el ancho cambie;
+      // remedir ahí estira y encoge el encabezado —y con él la página entera—
+      // en pleno scroll, y el dedo termina peleando contra el salto.
+      var anchoPrevio = window.innerWidth;
+      window.addEventListener("resize", function () {
+        if (window.innerWidth === anchoPrevio) { return; }
+        anchoPrevio = window.innerWidth;
+        acomodar();
+      });
+
+      // La barra también puede cambiar de ancho sin que cambie la ventana
+      // (aparece una barra de scroll, por ejemplo). Se mira su ancho y no su
+      // alto: `acomodar` cambia el alto de la barra, así que mirarlo sería
+      // pedirle que se llame a sí misma para siempre.
+      if (window.ResizeObserver) {
+        var anchoBarra = barra.clientWidth;
+        new ResizeObserver(function () {
+          if (barra.clientWidth === anchoBarra) { return; }
+          anchoBarra = barra.clientWidth;
+          acomodar();
+        }).observe(barra);
+      }
+      // Poppins se carga después del primer dibujo y cambia los anchos.
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(acomodar);
+      }
+    })();
+  </script>
   {% endif %}
 
   <main class="{% block contenedor_clase %}contenedor{% endblock %}">
@@ -45,8 +124,18 @@
 
   {% if user.is_authenticated %}
   <footer class="footer">
-    Sistema de Expedientes · <span class="logo-damasco">{% include "damasco/logo.html" %}</span> · RRHH
+    {{ sistema_largo }} · <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
   </footer>
   {% endif %}
+
+  {% comment %}
+  Va al final y con `defer`: necesita los desplegables ya dibujados, y no hay
+  apuro en que corra antes de que se vea la página. Si nunca llegara a correr,
+  los desplegables siguen siendo los de siempre.
+  {% endcomment %}
+  {% if user.is_authenticated %}
+    <script src="{% estatico 'js/buscable.js' %}" defer></script>
+  {% endif %}
+  {% block scripts %}{% endblock %}
 </body>
 </html>

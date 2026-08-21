@@ -1,0 +1,85 @@
+{% comment %}
+Hijos del trabajador. La cantidad sale del listado, no de un campo aparte: así
+nunca queda desactualizada.
+
+Espera en el contexto: `trabajador`, `hijos` y `form_hijo`.
+{% endcomment %}
+<div class="card">
+  <div class="flex entre wrap">
+    <h2 style="margin:0">
+      Hijos
+      {% if hijos %}<span class="badge azul">{{ hijos|length }}</span>{% endif %}
+    </h2>
+  </div>
+
+  {% if hijos %}
+  <div class="tabla-scroll" style="margin-top:.6rem">
+    <table class="datos">
+      <thead>
+        <tr>
+          <th>Nombre y apellido</th>
+          <th>Nacimiento</th>
+          <th>Edad</th>
+          <th>Cédula</th>
+          {% if user.puede_borrar %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in hijos %}
+        <tr>
+          <td><strong>{{ h.nombre_completo }}</strong>
+            {% if h.observaciones %}
+              <div class="pequeno mut">{{ h.observaciones }}</div>
+            {% endif %}
+          </td>
+          <td>{{ h.fecha_nacimiento|date:"d/m/Y" }}</td>
+          <td>
+            {{ h.edad }} {% if h.edad == 1 %}año{% else %}años{% endif %}
+            {% if h.es_menor %}<span class="badge gris">menor</span>{% endif %}
+          </td>
+          <td class="mut pequeno">{{ h.documento_identidad|default:"—" }}</td>
+          {# Quitar es del Administrador; los demás roles solo agregan. #}
+          {% if user.puede_borrar %}
+          <td style="text-align:right">
+            <form method="post" action="{% url 'expedientes:hijo_borrar' h.pk %}"
+                  onsubmit="return confirm('¿Quitar a {{ h.nombre_completo|escapejs }} del expediente?')">
+              {% csrf_token %}
+              <button class="btn ghost chico" type="submit">Quitar</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="pequeno mut">No hay hijos cargados.</p>
+  {% endif %}
+
+  {% if user.puede_editar %}
+  <form method="post" action="{% url 'expedientes:hijo_agregar' trabajador.pk %}"
+        style="margin-top:.9rem">
+    {% csrf_token %}
+    {% if form_hijo.non_field_errors %}
+      <div class="errores">{{ form_hijo.non_field_errors }}</div>
+    {% endif %}
+    <div class="grid-2">
+      {% for campo in form_hijo %}
+      <div class="campo mb0">
+        <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+        {{ campo }}
+        {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:.8rem">
+      <button class="btn chico" type="submit">Agregar hijo</button>
+    </div>
+  </form>
+  <p class="pequeno mut mb0" style="margin-top:.6rem">
+    La edad se calcula sola con la fecha de nacimiento, así el listado no
+    envejece.
+  </p>
+  {% endif %}
+</div>
