@@ -85,8 +85,19 @@ Contraseña de todos: **`Demo1234`**
 
 ## Despliegue en el servidor físico interno
 
-1. **`.env` de producción**:
-   - `DJANGO_DEBUG=0`
+1. **`.env` de producción**. Lo más simple es dejar que lo arme el script:
+
+   ```
+   crear_env.bat servidor
+   ```
+
+   Ese modo escribe `DJANGO_DEBUG=0` y `DJANGO_SECURE_COOKIES=1` solos, y nunca
+   pisa un `.env` que ya exista. Si lo hacés a mano, lo que tiene que quedar es:
+
+   - `DJANGO_DEBUG=0` — **lo más importante de esta lista**. Con `1` en una
+     dirección pública, cualquier error muestra la traza completa: rutas del
+     servidor, fragmentos de configuración y consultas. Si la variable no está,
+     vale `0`: el sistema falla hacia el lado seguro.
    - `DJANGO_ALLOWED_HOSTS=rrhh.empresa.local,192.168.x.x` (el nombre/IP del servidor)
    - `DJANGO_SECURE_COOKIES=1` (si servís por HTTPS, recomendado)
    - `DJANGO_CSRF_TRUSTED_ORIGINS=https://rrhh.empresa.local`
@@ -101,7 +112,10 @@ Contraseña de todos: **`Demo1234`**
    Poné delante **Nginx o IIS** como proxy inverso con HTTPS (certificado
    interno). Serví los estáticos con `python manage.py collectstatic`.
 
-3. **Base de datos**: para varios usuarios simultáneos, migrá de SQLite a
+3. **Base de datos**: SQLite deja escribir a una persona por vez. Está
+   configurado para esperar el turno hasta 20 segundos en vez de fallar con
+   *database is locked*, que alcanza para el uso actual. Si con el tiempo se
+   nota lentitud al guardar con varias personas a la vez, el paso siguiente es
    **PostgreSQL** (cambiar `DATABASES` en `config/settings.py`).
 
 4. **Copias de seguridad** (crítico): respaldá periódicamente

@@ -29,7 +29,11 @@ def env_list(nombre: str) -> list[str]:
 # ---------------------------------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-solo-para-desarrollo-cambiar")
 
-DEBUG = env_bool("DJANGO_DEBUG", True)
+# Por defecto APAGADO. Es a propósito: si alguien copia el proyecto al servidor
+# sin `.env`, o se le borra la línea, lo que pasa es que deja de mostrar las
+# trazas de error, no que empiece a mostrarlas. Para desarrollar se prende
+# escribiendo DJANGO_DEBUG=1 en el .env, que es lo que deja `crear_env.bat`.
+DEBUG = env_bool("DJANGO_DEBUG", False)
 
 # Un punto adelante ("`.aplicacionesdamasco.com`") vale para el dominio y para
 # todos sus subdominios. Hace falta porque el túnel de Cloudflare arma nombres
@@ -141,6 +145,17 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        "OPTIONS": {
+            # SQLite deja escribir a uno solo por vez. Sin esto, la segunda
+            # persona que guarda en el mismo instante recibe "database is
+            # locked" en la cara; con esto espera su turno hasta 20 segundos,
+            # que es muchísimo más de lo que tarda cualquier guardado real.
+            "timeout": 20,
+            # Pide el candado de escritura al abrir la transacción y no a mitad
+            # de camino. Evita el caso feo: dos guardados que ya empezaron y
+            # uno tiene que abortar cuando iba por la mitad.
+            "transaction_mode": "IMMEDIATE",
+        },
     }
 }
 # Nota: para muchos usuarios simultáneos conviene migrar a PostgreSQL.
@@ -154,6 +169,12 @@ AUTH_USER_MODEL = "cuentas.Usuario"
 LOGIN_URL = "cuentas:login"
 LOGIN_REDIRECT_URL = "expedientes:trabajador_list"
 LOGOUT_REDIRECT_URL = "cuentas:login"
+
+# Cuántos intentos fallidos se toleran antes de frenar, y por cuánto tiempo.
+# No es contra alguien que se equivocó de tecla —cinco intentos sobran— sino
+# contra probar contraseñas de a miles contra una dirección pública.
+LOGIN_INTENTOS_MAX = 5
+LOGIN_BLOQUEO_SEGUNDOS = 15 * 60
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

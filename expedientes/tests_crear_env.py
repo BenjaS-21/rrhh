@@ -44,16 +44,41 @@ class CrearEnv(SimpleTestCase):
         shutil.copy(BAT, self.carpeta / "crear_env.bat")
         self.addCleanup(shutil.rmtree, self.carpeta, ignore_errors=True)
 
-    def correr(self, respuesta=""):
+    def correr(self, respuesta="", *argumentos):
         """Ejecuta el .bat. `respuesta` es lo que se tipea si pregunta algo."""
         return subprocess.run(
-            ["cmd", "/c", str(self.carpeta / "crear_env.bat")],
+            ["cmd", "/c", str(self.carpeta / "crear_env.bat"), *argumentos],
             cwd=self.carpeta, input=respuesta + "\r\n",
             capture_output=True, timeout=120,
             encoding="cp1252", errors="replace",
             # `pause` espera una tecla: con stdin cerrado sigue de largo.
             env={**os.environ},
         )
+
+    # --- Modo servidor --------------------------------------------------------
+    def test_en_modo_servidor_no_deja_las_trazas_de_error_a_la_vista(self):
+        """El .env del servidor no puede salir igual que el de una laptop.
+
+        Con DEBUG=1 sobre una direccion publica, cualquiera que provoque un
+        error ve las rutas, la configuracion y las consultas del sistema. Que
+        el propio script lo deje bien evita depender de que alguien se acuerde
+        de editarlo a mano despues de instalar.
+        """
+        self.correr("", "servidor")
+        valores = _leer(self.carpeta)
+        self.assertEqual(valores["DJANGO_DEBUG"], "0")
+        self.assertEqual(valores["DJANGO_SECURE_COOKIES"], "1")
+
+    def test_sin_argumento_sigue_siendo_una_maquina_de_desarrollo(self):
+        """Testigo: es para lo que se usa casi siempre, y ahi las trazas ayudan."""
+        self.correr()
+        valores = _leer(self.carpeta)
+        self.assertEqual(valores["DJANGO_DEBUG"], "1")
+        self.assertEqual(valores["DJANGO_SECURE_COOKIES"], "0")
+
+    def test_avisa_en_que_modo_quedo(self):
+        """Si no lo dice, no hay forma de saber cual de los dos corrio."""
+        self.assertIn("servidor", self.correr("", "servidor").stdout)
 
     # --- Crear de cero --------------------------------------------------------
     def test_escribe_el_archivo_con_todo_lo_que_settings_lee(self):

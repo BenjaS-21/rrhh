@@ -22,6 +22,20 @@ echo.
 
 REM Alcanza con Python a secas: las claves se arman con la libreria
 REM estandar, asi que esto funciona aunque el entorno no este armado todavia.
+REM Modo servidor: "crear_env.bat servidor" deja el .env listo para produccion
+REM (sin trazas de error en pantalla y con cookies seguras). Sin argumento,
+REM queda como maquina de desarrollo, que es para lo que se usa casi siempre.
+set "MODO=desarrollo"
+set "EN_DEBUG=1"
+set "COOKIES=0"
+if /i "%~1"=="servidor" (
+  set "MODO=servidor"
+  set "EN_DEBUG=0"
+  set "COOKIES=1"
+)
+echo   Modo: %MODO%
+echo.
+
 set "PY=.venv\Scripts\python.exe"
 if not exist "%PY%" set "PY=python"
 "%PY%" -c "import secrets" >nul 2>&1
@@ -153,7 +167,9 @@ REM llevan dos: van agregando renglones abajo.
 >>".env" echo DJANGO_SECRET_KEY=%SECRETO%
 >>".env" echo.
 >>".env" echo # 1 = desarrollo, muestra los errores en pantalla. 0 = produccion.
->>".env" echo DJANGO_DEBUG=1
+>>".env" echo # En el servidor va 0: con 1, cualquier error le muestra a quien sea
+>>".env" echo # las rutas, la configuracion y las consultas del sistema.
+>>".env" echo DJANGO_DEBUG=%EN_DEBUG%
 >>".env" echo.
 >>".env" echo # Dominios permitidos, separados por coma.
 >>".env" echo # aplicacionesdamasco.com y sus subdominios ya vienen permitidos
@@ -172,7 +188,7 @@ REM llevan dos: van agregando renglones abajo.
 >>".env" echo DOCUMENTOS_ENCRYPTION_KEY=%CIFRADO%
 >>".env" echo.
 >>".env" echo # Pone 1 en el servidor con HTTPS para forzar cookies seguras.
->>".env" echo DJANGO_SECURE_COOKIES=0
+>>".env" echo DJANGO_SECURE_COOKIES=%COOKIES%
 
 if not exist ".env" goto no_se_escribio
 

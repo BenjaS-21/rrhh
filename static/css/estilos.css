@@ -95,6 +95,14 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 0 0 12px; }
 .topbar .usuario { font-size: 13px; font-weight: 300; color: rgba(255,255,255,.85); text-align: right; }
 .topbar .usuario strong { color: #fff; display: block; font-weight: 600; }
 .topbar .usuario a { color: #fff; font-weight: 500; text-decoration: underline; }
+/* "Salir" es un boton dentro de un formulario, no un enlace: cerrar sesion
+   tiene que viajar por POST. Se lo disfraza de enlace para que la barra siga
+   leyendose igual que siempre. */
+.topbar .usuario .salir { display: inline; }
+.topbar .usuario .salir button {
+  background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  font: inherit; color: #fff; font-weight: 500; text-decoration: underline;
+}
 
 /* Menú detrás de un botón --------------------------------------------------
    No depende de un ancho de pantalla sino de si las entradas entran: el script

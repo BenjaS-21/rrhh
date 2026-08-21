@@ -50,7 +50,10 @@
     <div class="usuario">
       <strong>{{ user.get_full_name|default:user.username }}</strong>
       {{ user.get_rol_display }} · {{ user.descripcion_alcance }}{% if user.departamento %} · {{ user.departamento }}{% endif %}
-      · <a href="{% url 'cuentas:logout' %}">Salir</a>
+      · <form method="post" action="{% url 'cuentas:logout' %}" class="salir">
+        {% csrf_token %}
+        <button type="submit">Salir</button>
+      </form>
     </div>
   </header>
 

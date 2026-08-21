@@ -113,10 +113,15 @@ class Command(BaseCommand):
 
         self.stdout.write("Creando invitaciones de ejemplo…")
         admin = Usuario.objects.filter(rol=Usuario.Rol.ADMIN).first()
+        # Sin invitación de ADMIN a propósito. Estos links son válidos: quien
+        # abra el que corresponde se crea una cuenta con ese rol, sin que nadie
+        # lo apruebe. Una de administrador nacional, dejada abierta en un
+        # servidor de verdad porque alguien corrió este comando de más, es una
+        # llave maestra tirada en la puerta. Si hace falta probar el rol, se
+        # genera desde Invitaciones y se anula después.
         ejemplos_inv = [
             (Usuario.Rol.RRHH_INTERIOR, zona_norte, "RRHH nuevo — zona Norte"),
             (Usuario.Rol.SOLO_LECTURA, zona_sur, "Consulta — zona Sur"),
-            (Usuario.Rol.ADMIN, None, "Nuevo administrador nacional"),
         ]
         for rol, zona, nota in ejemplos_inv:
             InvitacionRegistro.objects.get_or_create(
