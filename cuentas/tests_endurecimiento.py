@@ -242,3 +242,30 @@ class LaConfiguracionFallaHaciaElLadoSeguro(TestCase):
         """Dos personas guardando a la vez: SQLite deja escribir a una sola."""
         opciones = settings.DATABASES["default"].get("OPTIONS", {})
         self.assertGreaterEqual(opciones.get("timeout", 0), 5)
+
+
+class ElSuiteNoDependeDelEnvDeLaMaquina(TestCase):
+    """Testigo del enredo que casi deja el endurecimiento sin verificar.
+
+    Este equipo es el servidor, asi que tiene el `.env` de produccion. Al poner
+    `DJANGO_SECURE_COOKIES=1`, 500 de 636 pruebas empezaron a fallar de golpe:
+    ninguna por un error del sistema, todas porque el cliente de pruebas habla
+    por HTTP y se comia un 301 antes de llegar a la vista.
+
+    Que el resultado del suite cambie segun como este configurada la maquina lo
+    vuelve inutil. Se fija en `config/test_runner.py`.
+    """
+
+    def test_el_corredor_propio_esta_puesto(self):
+        self.assertEqual(settings.TEST_RUNNER, "config.test_runner.Corredor")
+
+    def test_y_deja_el_transporte_en_http(self):
+        from config.test_runner import COMO_SI_FUERA_HTTP
+        for nombre, esperado in COMO_SI_FUERA_HTTP.items():
+            with self.subTest(ajuste=nombre):
+                self.assertEqual(getattr(settings, nombre), esperado)
+
+    def test_una_pagina_publica_contesta_y_no_redirige(self):
+        """Lo que se rompia: 301 a https en cada pedido, sin llegar a la vista."""
+        r = self.client.get(reverse("cuentas:login"))
+        self.assertEqual(r.status_code, 200)

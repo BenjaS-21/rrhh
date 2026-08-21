@@ -36,12 +36,20 @@ echo.
 
 echo Iniciando servidor...
 echo.
-echo   Local:   http://127.0.0.1:6652/
 echo   Publico: https://rrhh.aplicacionesdamasco.com/  (via tunel Cloudflare)
 echo   Para DETENER: cerra esta ventana o presiona Ctrl+C.
 echo.
+echo   Nota: con DJANGO_SECURE_COOKIES=1 el sistema exige HTTPS, asi que
+echo   http://127.0.0.1:6652/ redirige y no abre. Se entra por el tunel.
+echo   Para revisar algo en local, pone DJANGO_SECURE_COOKIES=0 un rato.
+echo.
 
-start "" http://127.0.0.1:6652/
-".venv\Scripts\python.exe" manage.py runserver 127.0.0.1:6652
+start "" https://rrhh.aplicacionesdamasco.com/
+REM --insecure NO es una opcion insegura: le dice al servidor que siga
+REM entregando los archivos de /static/ aunque DJANGO_DEBUG este en 0. Sin
+REM esto el sitio abre sin CSS ni JavaScript, y apagar DEBUG en el servidor
+REM -que es lo que evita mostrar las trazas de error a cualquiera- deja de
+REM ser posible. Es el mismo modo de entrega que se venia usando.
+".venv\Scripts\python.exe" manage.py runserver 127.0.0.1:6652 --insecure
 
 pause

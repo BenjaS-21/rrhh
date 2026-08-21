@@ -228,6 +228,11 @@ DATA_UPLOAD_MAX_NUMBER_FILES = 40
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Las pruebas corren con el transporte fijado a HTTP plano, pase lo que pase en
+# el .env de la maquina. Ver config/test_runner.py: sin esto, el suite entero
+# depende de como este configurado el equipo donde se ejecuta.
+TEST_RUNNER = "config.test_runner.Corredor"
+
 
 # ---------------------------------------------------------------------------
 # Cifrado de documentos en reposo

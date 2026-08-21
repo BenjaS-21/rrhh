@@ -51,3 +51,32 @@ class VersionDeLaHojaDeEstilos(TestCase):
         enlace = re.search(r'<link rel="stylesheet" href="([^"]+)"', cuerpo)
         self.assertIsNotNone(enlace)
         self.assertIn("?v=", enlace.group(1))
+
+
+class ElArranqueSigueEntregandoLosEstaticos(TestCase):
+    """Testigo de un enredo que deja el sitio sin CSS y sin JavaScript.
+
+    En el servidor, `DJANGO_DEBUG` va en 0: con 1, cualquier error le muestra a
+    quien sea las rutas, la configuración y las consultas del sistema. Pero
+    apagarlo tiene un efecto de costado poco evidente: `runserver` deja de
+    entregar `/static/`, y el sitio abre sin estilos ni scripts.
+
+    El arreglo es `--insecure`, que a pesar del nombre no baja ninguna defensa:
+    solo le dice que siga entregando los archivos estáticos con DEBUG apagado.
+    Quien lo saque para "limpiar" el comando rompe la pantalla entera, así que
+    queda escrito acá por qué está.
+    """
+
+    def arranque(self):
+        return (Path(settings.BASE_DIR) / "iniciar.bat").read_text(
+            encoding="cp1252", errors="replace")
+
+    def test_runserver_lleva_insecure(self):
+        texto = self.arranque()
+        linea = [l for l in texto.splitlines() if "runserver" in l]
+        self.assertTrue(linea, "iniciar.bat ya no arranca el servidor")
+        self.assertIn("--insecure", linea[0],
+                      "sin --insecure el sitio abre sin CSS ni JavaScript")
+
+    def test_y_esta_explicado_para_que_nadie_lo_saque(self):
+        self.assertIn("static", self.arranque().lower())
