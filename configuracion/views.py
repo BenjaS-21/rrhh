@@ -81,6 +81,9 @@ CATALOGOS = {
         "icono": "🏬", "activo": "activa", "select_related": ["zona"],
         "columnas": [("Nombre", lambda o: o.nombre),
                      ("Zona", lambda o: str(o.zona)),
+                     # Se muestra `lugar` y no `ciudad`: asi se ve de una cual
+                     # va a salir impresa en los documentos, este cargada o no.
+                     ("Ciudad", lambda o: o.lugar),
                      ("Central", lambda o: _si_no(o.es_central))],
     },
     "tipos-documento": {

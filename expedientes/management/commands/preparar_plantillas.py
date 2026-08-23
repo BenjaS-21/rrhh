@@ -112,6 +112,87 @@ class Command(BaseCommand):
             if t.text and patron.search(t.text):
                 t.text = patron.sub("{{SALARIO_TEXTO}}", t.text)
                 cambios += 1
+        cambios += self._separar_domicilio_legal(root)
+        self._guardar_docx(partes, root, salida)
+        return cambios
+
+    # -- Acuerdo de confidencialidad: misma ciudad fija que la carta ---------
+    def _preparar_confidencialidad(self, origen, salida):
+        """Cambia el "En Caracas," del cierre por la ciudad que corresponda.
+
+        Mismo caso que la carta: la fecha era campo y la ciudad no. Importa que
+        sea la misma que en el contrato, porque se firman juntos: dos papeles
+        del mismo dia con dos ciudades distintas se leen como un error.
+
+        Acá la clausula de jurisdiccion tambien dice Caracas, pero vive dentro
+        de un parrafo de texto corrido y no se toca: se busca solo el "Caracas"
+        que es un pedazo suelto detras de un "En ".
+        """
+        partes, root = self._abrir_docx(origen)
+        cambios = 0
+        anterior = None
+        for t in root.iter(W + "t"):
+            if (t.text and t.text.strip() == "Caracas"
+                    and anterior is not None
+                    and (anterior.text or "").rstrip().endswith("En")):
+                t.text = "{{CIUDAD_DE_FIRMA}}"
+                cambios += 1
+            if t.text:
+                anterior = t
+        self._guardar_docx(partes, root, salida)
+        return cambios
+
+    # -- Jurisdiccion vs. lugar de firma -------------------------------------
+    @staticmethod
+    def _separar_domicilio_legal(root):
+        """El "domicilio especial" del contrato no es un lugar.
+
+        En el Word, la clausula de jurisdiccion -"eligen expresamente como
+        domicilio especial a la ciudad de X, a la Jurisdiccion de cuyos
+        Tribunales declaran someterse"- y el lugar de firma -"se hacen dos
+        ejemplares... en la ciudad de X"- usan EL MISMO campo, y estan en el
+        mismo parrafo. Mientras ese campo valia CARACAS para todo el mundo no
+        se notaba; al hacer que el lugar siga a la tienda, la jurisdiccion se
+        iba con el: un contrato de Guatire pasaba a someterse a los tribunales
+        de Guatire sin que nadie lo hubiera decidido.
+
+        Son dos cosas distintas y se separan: la primera aparicion del parrafo
+        es la jurisdiccion y pasa a `Domicilio_legal`, que no cambia nunca; la
+        segunda es donde se firma y sigue siendo `Ciudad_de_firma`.
+        """
+        cambios = 0
+        for parrafo in root.iter(W + "p"):
+            texto = "".join(t.text or "" for t in parrafo.iter(W + "t"))
+            if "domicilio especial" not in texto:
+                continue
+            for instr in parrafo.iter(W + "instrText"):
+                if instr.text and "Ciudad_de_firma" in instr.text:
+                    instr.text = instr.text.replace(
+                        "Ciudad_de_firma", "Domicilio_legal")
+                    cambios += 1
+                    break          # solo la primera: la segunda es la firma
+        return cambios
+
+    # -- Carta de autorizacion: la ciudad estaba escrita fija ----------------
+    def _preparar_carta(self, origen, salida):
+        """Cambia el "Caracas," del encabezado por la ciudad que corresponda.
+
+        La fecha del encabezado si era un campo; la ciudad no. Asi que TODAS
+        las autorizaciones de ingreso decian Caracas, incluso la de alguien que
+        entra al CENDIS de Guatire. Lo raro es que el documento se dirige al
+        gerente de esa tienda, que lee una ciudad que no es la suya.
+
+        Solo se toca el encabezado. Mas abajo no hay ninguna otra ciudad en
+        este formato, pero en los contratos si las hay -"domicilio especial a
+        la ciudad de CARACAS, a la Jurisdiccion de cuyos Tribunales"- y esas
+        son una eleccion legal, no un lugar: no se tocan nunca.
+        """
+        partes, root = self._abrir_docx(origen)
+        cambios = 0
+        for t in root.iter(W + "t"):
+            if t.text and re.fullmatch(r"\s*Caracas,\s*", t.text):
+                t.text = "{{CIUDAD_DE_FIRMA}}, "
+                cambios += 1
         self._guardar_docx(partes, root, salida)
         return cambios
 
@@ -145,6 +226,17 @@ class Command(BaseCommand):
         for t in root.iter(W + "t"):
             texto = (t.text or "").strip()
 
+            # El cierre dice "en la ciudad de X a los N de MES de ANO". El mes
+            # y el ano son campos; el dia quedo escrito a mano. Resultado: todo
+            # contrato corporativo se firmaba "a los 11", con el mes correcto.
+            # El contrato de trabajo si trae el campo, por eso solo pasa aca.
+            if (anterior is not None and (anterior.text or "").endswith("a los ")
+                    and texto.isdigit()):
+                t.text = "{{DIA_DE_INGRESO}}"
+                cambios += 1
+                anterior = t
+                continue
+
             if texto in directos:
                 # El "V-" vive en su propio run, justo antes del numero. Hay
                 # tres "V-" en el documento y solo dos son de esta cedula: por
@@ -157,6 +249,7 @@ class Command(BaseCommand):
             if t.text:
                 anterior = t
 
+        cambios += self._separar_domicilio_legal(root)
         self._guardar_docx(partes, root, salida)
         return cambios
 

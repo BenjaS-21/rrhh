@@ -418,6 +418,13 @@ def generar(clave, trabajador):
 # ---------------------------------------------------------------------------
 # Datos que se vuelcan en los documentos
 # ---------------------------------------------------------------------------
+# El domicilio especial de los contratos: a que tribunales se someten las
+# partes. NO es la ciudad donde se firma y no cambia con la tienda de cada
+# trabajador; es una eleccion legal de la empresa. Vive aca, aparte, porque en
+# el Word era el mismo campo que el lugar de firma y confundirlos cambia la
+# jurisdiccion de un contrato sin que nadie lo decida.
+DOMICILIO_LEGAL = "CARACAS"
+
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
          "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
 
@@ -467,7 +474,13 @@ def contexto_documentos(trabajador) -> dict:
         "Tienda": sede.nombre if sede else "",
         "Direccion_de_tienda": (sede.direccion if sede else "") or "",
         # Firma
-        "Ciudad_de_firma": (datos.ciudad_firma if datos else "") or "",
+        # Donde se firma: lo que diga el expediente, si alguien lo escribio
+        # porque se firmo en otro lado; si no, la ciudad de la tienda. Antes
+        # salia CARACAS para todo el mundo -era el valor por omision del
+        # campo-, asi que una autorizacion de Guatire decia Caracas.
+        "Ciudad_de_firma": ((datos.ciudad_firma if datos else "") or "").strip()
+                           or (sede.lugar if sede else ""),
+        "Domicilio_legal": DOMICILIO_LEGAL,
         "Edad": _edad(trabajador.fecha_nacimiento, hoy),
         # Datos de contratación (pueden no estar cargados todavía)
         "Estado_civil": (datos.estado_civil if datos else "") or "",

@@ -40,6 +40,13 @@ class Sede(models.Model):
     nombre = models.CharField(max_length=120)
     zona = models.ForeignKey(Zona, on_delete=models.PROTECT, related_name="sedes")
     direccion = models.CharField(max_length=255, blank=True)
+    ciudad = models.CharField(
+        max_length=120, blank=True,
+        help_text="La ciudad donde esta la tienda: GUATIRE, VALENCIA, MARACAY. "
+                  "Es la que sale como lugar en los documentos ('GUATIRE, 24 de "
+                  "agosto de 2026'). Si se deja vacia sale la zona, que es el "
+                  "estado, asi que nunca queda en blanco.",
+    )
     es_central = models.BooleanField(
         default=False,
         help_text="Marca la Sede Central (administración nacional).",
@@ -56,6 +63,16 @@ class Sede(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.zona.nombre})"
+
+    @property
+    def lugar(self):
+        """Donde se firman los documentos de esta tienda.
+
+        La ciudad si esta cargada; si no, la zona, que es el estado. Nunca
+        queda vacio: un documento que dice ", 24 de agosto de 2026" se ve peor
+        que uno que dice el estado en vez de la ciudad.
+        """
+        return self.ciudad.strip() or self.zona.nombre
 
 
 class Departamento(models.Model):

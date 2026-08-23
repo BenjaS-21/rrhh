@@ -87,7 +87,7 @@ class ZonaForm(_BaseForm):
 class SedeForm(_BaseForm):
     class Meta:
         model = Sede
-        fields = ["nombre", "zona", "direccion", "es_central", "activa"]
+        fields = ["nombre", "zona", "ciudad", "direccion", "es_central", "activa"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

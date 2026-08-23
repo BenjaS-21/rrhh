@@ -386,7 +386,9 @@ class DatosContratacion(models.Model):
         "fecha fin de contrato", null=True, blank=True,
     )
     ciudad_firma = models.CharField(
-        "ciudad de firma", max_length=120, blank=True, default="CARACAS",
+        "ciudad de firma", max_length=120, blank=True,
+        help_text="Solo si se firma en otra ciudad que la de la tienda. "
+                  "Vacio -lo normal- sale la ciudad de la tienda.",
     )
 
     # --- Datos bancarios ----------------------------------------------------
