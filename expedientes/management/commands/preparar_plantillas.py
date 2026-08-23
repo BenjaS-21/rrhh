@@ -21,7 +21,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from expedientes.documentos import PLANTILLAS, _completar_raiz
+from expedientes.documentos import MESES, PLANTILLAS, _completar_raiz
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -139,7 +139,98 @@ class Command(BaseCommand):
                 cambios += 1
             if t.text:
                 anterior = t
+        cambios += self._fecha_del_acuerdo(root)
         self._guardar_docx(partes, root, salida)
+        return cambios
+
+    # -- Fechas que quedaron escritas a mano en los Word ---------------------
+    @staticmethod
+    def _dia_y_mes(textos, desde, dia, mes):
+        """Cambia por marcadores el dia y el mes escritos a mano tras `desde`.
+
+        Word parte el texto en pedazos por cualquier motivo -un cambio de
+        formato invisible, una correccion vieja-, asi que el "11" puede venir
+        como dos pedazos de un caracter. Se juntan todos los que sean digitos
+        seguidos: el primero se lleva el marcador y los demas se vacian.
+        """
+        cambios = 0
+        i = desde + 1
+        primero = True
+        while i < len(textos):
+            crudo = textos[i].text or ""
+            texto = crudo.strip()
+            if texto.isdigit():
+                textos[i].text = dia if primero else ""
+                primero = False
+                cambios += 1
+            elif texto.lower() in MESES:
+                # El espacio de adelante lo puso el Word y hace falta.
+                textos[i].text = (" " if crudo.startswith(" ") else "") + mes
+                return cambios + 1
+            elif texto and not primero and texto != "de":
+                break      # ya paso la fecha
+            i += 1
+        return cambios
+
+    def _fechas_del_corporativo(self, root):
+        """La clausula Cuarta del contrato corporativo tenia la fecha fija.
+
+        "El presente contrato entrara en vigencia el 11 de agosto de 2026 y
+        concluira el 11 de noviembre de 2026": el dia y el mes de las dos
+        fechas estaban escritos a mano. Solo los anios eran campos, asi que el
+        contrato cambiaba de anio pero no de dia ni de mes, y salia siempre con
+        las fechas de la persona que sirvio de ejemplo. El contrato de trabajo
+        normal si tiene los campos; por eso pasaba solo aca.
+
+        Ademas el anio del final apuntaba al de ingreso: un contrato que empieza
+        en noviembre y termina en enero decia que terminaba el anio anterior.
+        """
+        cambios = 0
+        for parrafo in root.iter(W + "p"):
+            textos = list(parrafo.iter(W + "t"))
+            entero = "".join(t.text or "" for t in textos)
+            if "entrará en vigencia el" not in entero:
+                continue
+
+            for k, t in enumerate(textos):
+                if (t.text or "").endswith("vigencia el "):
+                    cambios += self._dia_y_mes(
+                        textos, k, "{{DIA_DE_INGRESO}}", "{{MES_DE_INGRESO}}")
+                elif (t.text or "").strip() == "concluirá el":
+                    cambios += self._dia_y_mes(
+                        textos, k, "{{DIA_DE_CULMINACION}}",
+                        "{{MES_DE_CULMINACION}}")
+
+            # El segundo anio es el del final del contrato, no el del comienzo.
+            anios = [i for i in parrafo.iter(W + "instrText")
+                     if i.text and "o_de_ingreso" in i.text]
+            if len(anios) == 2:
+                anios[1].text = anios[1].text.replace(
+                    "Año_de_ingreso", "Año_de_culminación").replace(
+                    "año_de_ingreso", "Año_de_culminación")
+                cambios += 1
+            break
+        return cambios
+
+    def _fecha_del_acuerdo(self, root):
+        """La clausula Primera del acuerdo de confidencialidad, igual.
+
+        "La Empresa ha suscrito en fecha 16 de <mes> de <anio>": el mes y el
+        anio eran campos y el dia no, asi que el acuerdo decia siempre 16.
+        """
+        cambios = 0
+        for parrafo in root.iter(W + "p"):
+            textos = list(parrafo.iter(W + "t"))
+            if "ha suscrito en fecha" not in "".join(t.text or "" for t in textos):
+                continue
+            for k, t in enumerate(textos):
+                if (t.text or "").endswith("ha suscrito en fecha "):
+                    siguiente = textos[k + 1] if k + 1 < len(textos) else None
+                    if siguiente is not None and (siguiente.text or "").strip().isdigit():
+                        siguiente.text = "{{DIA_DE_INGRESO}}"
+                        cambios += 1
+                    break
+            break
         return cambios
 
     # -- Jurisdiccion vs. lugar de firma -------------------------------------
@@ -250,6 +341,7 @@ class Command(BaseCommand):
                 anterior = t
 
         cambios += self._separar_domicilio_legal(root)
+        cambios += self._fechas_del_corporativo(root)
         self._guardar_docx(partes, root, salida)
         return cambios
 
