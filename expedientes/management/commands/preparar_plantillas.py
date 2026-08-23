@@ -1,8 +1,9 @@
-"""Deja las 5 plantillas listas para la generación automática, en `plantillas/`.
+"""Deja las plantillas Word listas para la generación automática, en `plantillas/`.
 
-Tres de los archivos ya traían los campos de combinación de Word y se copian
-tal cual. Los otros dos tenían huecos con guiones bajos (`______`) en vez de
-campos, así que acá se les insertan marcadores `{{CAMPO}}` en el lugar exacto.
+Algunos archivos ya traían los campos de combinación de Word y se copian tal
+cual. Otros tenían huecos con guiones bajos (`______`) en vez de campos, o
+datos de una persona real escritos a mano, así que acá se les insertan
+marcadores `{{CAMPO}}` en el lugar exacto.
 
 Es idempotente: se puede volver a correr después de cambiar los originales.
 
@@ -111,6 +112,51 @@ class Command(BaseCommand):
             if t.text and patron.search(t.text):
                 t.text = patron.sub("{{SALARIO_TEXTO}}", t.text)
                 cambios += 1
+        self._guardar_docx(partes, root, salida)
+        return cambios
+
+    # -- Contrato corporativo: el recuadro de arriba traía datos de una persona
+    #    real escritos a mano, en vez de campos --------------------------------
+    def _preparar_corporativo(self, origen, salida):
+        """Saca los datos de la persona de ejemplo del recuadro de encabezado.
+
+        El Word llega con los campos de combinación puestos en el cuerpo, pero
+        el recuadro del principio —el que resume el trabajador— estaba escrito
+        a mano con los datos de quien sirvió de ejemplo: nombre completo,
+        cédula y cargo. Sin esto, cada contrato que se genere lleva arriba a
+        esa persona y abajo a la que corresponde. Es un dato personal de
+        alguien que no tiene nada que ver, repartido en el contrato de todos.
+
+        Se reemplaza por marcadores para que el recuadro se llene igual que el
+        resto del documento.
+        """
+        partes, root = self._abrir_docx(origen)
+        cambios = 0
+
+        directos = {
+            "RAMON ALFREDO CASTILLO SANCHEZ": "{{NOMBRES_Y_APELLIDOS}}",
+            "CHIEF OF TECHNOLOGY (CTO)": "{{CARGO}}",
+            # `Cedula` ya viene con la letra adelante ("V-30719983"), asi que
+            # el "V-" suelto que la precedia se borra mas abajo.
+            "19.692.045": "{{CEDULA}}",
+        }
+
+        anterior = None
+        for t in root.iter(W + "t"):
+            texto = (t.text or "").strip()
+
+            if texto in directos:
+                # El "V-" vive en su propio run, justo antes del numero. Hay
+                # tres "V-" en el documento y solo dos son de esta cedula: por
+                # eso se mira el de al lado y no todos.
+                if texto == "19.692.045" and anterior is not None                         and (anterior.text or "").strip() == "V-":
+                    anterior.text = ""
+                t.text = directos[texto]
+                cambios += 1
+
+            if t.text:
+                anterior = t
+
         self._guardar_docx(partes, root, salida)
         return cambios
 

@@ -119,7 +119,7 @@ class Trabajador(models.Model):
         """«V-30719983». Sin tipo cargado, el número tal cual está.
 
         Existe en un solo lugar porque la cédula se escribe en la ficha, en la
-        nómina, en el Excel y en los cinco documentos Word: armarla en cada uno
+        nómina, en el Excel y en los documentos Word: armarla en cada uno
         garantiza que alguno quede distinto.
 
         Los expedientes viejos traen el prefijo pegado dentro del número
@@ -347,7 +347,7 @@ class DatosContratacion(models.Model):
     )
 
     # --- Datos bancarios ----------------------------------------------------
-    # No los usa ninguna de las 5 plantillas Word; se guardan para la nómina.
+    # No los usa ninguna de las plantillas Word; se guardan para la nómina.
     banco = models.CharField(max_length=120, blank=True)
     prefijo = models.CharField(
         "prefijo del banco", max_length=4, blank=True,

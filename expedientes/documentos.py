@@ -381,6 +381,11 @@ PLANTILLAS = {
         "origen": "Formato de Carta de Autorización.docx",
         "archivo": "carta_aceptacion_en_tienda.docx",
     },
+    "corporativo": {
+        "titulo": "Contrato corporativo",
+        "origen": "CONTRATO CORPORATIVO.docx",
+        "archivo": "contrato_corporativo.docx",
+    },
 }
 
 

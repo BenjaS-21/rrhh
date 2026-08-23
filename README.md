@@ -312,7 +312,7 @@ mismo dato.
 ### Una sola carga de datos
 
 El alta del expediente (**Expedientes → Nuevo**) pide, en una sola pantalla,
-todo lo que hace falta para la nómina y para los 5 documentos. Está dividida en
+todo lo que hace falta para la nómina y para los 6 documentos. Está dividida en
 cuatro secciones:
 
 | Sección | Campos |
@@ -342,7 +342,7 @@ Si al momento de generar falta algún dato, el expediente lo avisa e indica en
 qué pantalla se completa cada uno.
 
 > Los datos **bancarios, la duración, las observaciones y el responsable** se
-> guardan para la nómina, pero **no los usa ninguna de las 5 plantillas**: no
+> guardan para la nómina, pero **no los usa ninguna plantilla**: no
 > son campos de combinación en ningún Word. Si hacen falta en algún documento,
 > hay que agregar el campo a la plantilla.
 

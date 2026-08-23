@@ -36,6 +36,12 @@ PLANTILLAS_LISTAS = all(
     (Path(settings.PLANTILLAS_DIR) / m["archivo"]).exists()
     for m in generador.PLANTILLAS.values()
 )
+# Las plantillas .docx, sacadas del registro y no escritas a mano: un Word que
+# se agregue mañana entra solo en las pruebas que revisan que el archivo salga
+# bien armado. El acta de recibos queda afuera porque es .rtf, otro formato.
+SOLO_DOCX = [clave for clave, meta in generador.PLANTILLAS.items()
+             if meta["archivo"].lower().endswith(".docx")]
+
 falta_plantillas = unittest.skipUnless(
     PLANTILLAS_LISTAS, "Faltan las plantillas: python manage.py preparar_plantillas"
 )
@@ -201,12 +207,12 @@ class Contexto(BaseDocumentos):
 
 @falta_plantillas
 class GeneracionReal(BaseDocumentos):
-    """Se generan los 5 Word de verdad, con las plantillas del proyecto."""
+    """Se generan todos los Word de verdad, con las plantillas del proyecto."""
 
     def setUp(self):
         self.client.force_login(self.admin)
 
-    def test_los_cinco_documentos_se_descargan(self):
+    def test_todos_los_documentos_se_descargan(self):
         for clave, meta in generador.PLANTILLAS.items():
             with self.subTest(documento=clave):
                 resp = self.client.get(self.url(clave))
@@ -216,7 +222,7 @@ class GeneracionReal(BaseDocumentos):
                 self.assertIn(meta["titulo"], resp["Content-Disposition"])
 
     def test_el_docx_generado_es_valido(self):
-        for clave in ["contrato", "confidencialidad", "beneficios", "carta"]:
+        for clave in SOLO_DOCX:
             with self.subTest(documento=clave):
                 resp = self.client.get(self.url(clave))
                 z = zipfile.ZipFile(BytesIO(resp.content))
@@ -283,7 +289,7 @@ class GeneracionReal(BaseDocumentos):
         eso deja sin declarar los prefijos de `mc:Ignorable`. Word entonces
         abre el archivo avisando que tiene "contenido ilegible".
         """
-        for clave in ["contrato", "confidencialidad", "beneficios", "carta"]:
+        for clave in SOLO_DOCX:
             resp = self.client.get(self.url(clave))
             z = zipfile.ZipFile(BytesIO(resp.content))
             for parte in z.namelist():
@@ -293,7 +299,7 @@ class GeneracionReal(BaseDocumentos):
                     ET.fromstring(z.read(parte))  # ParseError si quedó roto
 
     def test_se_conservan_los_namespaces_de_la_plantilla(self):
-        for clave in ["contrato", "confidencialidad", "beneficios", "carta"]:
+        for clave in SOLO_DOCX:
             resp = self.client.get(self.url(clave))
             z = zipfile.ZipFile(BytesIO(resp.content))
             for parte in z.namelist():
