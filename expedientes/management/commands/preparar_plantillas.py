@@ -289,8 +289,8 @@ class Command(BaseCommand):
         1. el renglón que quedaba al lado del campo del nombre  -> se elimina
         2. el de la cédula                                      -> marcador
 
-        Los demás (más cortos) son el bloque de firma y la fecha, y se dejan
-        en blanco a propósito para completarlos a mano al firmar.
+        Los del bloque de firma se dejan en blanco a propósito: se completan a
+        mano al firmar. Los de la FECHA no: ver `_cierre_del_recibo`.
 
         No se puede buscar por el texto que los rodea porque en RTF esa frase
         queda partida en varios grupos; por eso se ubican por orden y largo.
@@ -308,5 +308,49 @@ class Command(BaseCommand):
             return pendientes.pop(0)
 
         texto = re.sub(r"_{20,}", _sub, texto)
+        texto, mas = self._cierre_del_recibo(texto)
         salida.write_text(texto, encoding="latin-1", errors="replace")
-        return cambios
+        return cambios + mas
+
+    @staticmethod
+    def _cierre_del_recibo(texto):
+        """El renglón de cierre: "En ____ a los ___ días del mes de ___ de ___".
+
+        Dos cosas mal, las dos del Word original.
+
+        Donde va la ciudad hay un `MERGEFIELD Horario`. No es un descuido
+        inofensivo: el acta salía firmada "En ROTATIVO", que es el turno del
+        trabajador. Se cambia por la ciudad, la misma que usan el contrato y la
+        carta.
+
+        Y la fecha eran tres huecos en blanco para completar a mano. El sistema
+        conoce la fecha de ingreso y la imprime en todos los demás documentos;
+        dejarla a mano acá solo en este obliga a buscarla y copiarla, que es
+        justo lo que el expediente viene a evitar.
+
+        Se ubican los huecos a partir del campo, no por orden en el archivo: es
+        el único `Horario` del acta, así que el ancla no se corre si mañana
+        alguien agrega otro hueco más arriba.
+        """
+        marca = "MERGEFIELD Horario"
+        if marca not in texto:
+            return texto, 0
+        texto = texto.replace(marca, "MERGEFIELD Ciudad_de_firma", 1)
+
+        desde = texto.index("MERGEFIELD Ciudad_de_firma")
+        # El primero es la línea sobre la que se escribía la ciudad a mano:
+        # ahora la ciudad la pone el sistema, así que sobra.
+        pendientes = ["", "@@DIA_DE_INGRESO@@", "@@MES_DE_INGRESO@@",
+                      "@@ANO_DE_INGRESO@@"]
+        cambios = 1
+
+        def _sub(m):
+            nonlocal cambios
+            if not pendientes:
+                return m.group(0)
+            cambios += 1
+            return pendientes.pop(0)
+
+        cabeza, cola = texto[:desde], texto[desde:]
+        cola = re.sub(r"_{3,}", _sub, cola)
+        return cabeza + cola, cambios
