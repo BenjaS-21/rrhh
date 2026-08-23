@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% comment %}
+Los documentos que alguien marcó para eliminar y todavía están en el expediente.
+
+Quien marca no borra: pide. Acá el Administrador confirma o devuelve el archivo
+al expediente. Si hay un plazo puesto en Opciones, además se van solos.
+{% endcomment %}
+{% block titulo %}Pendientes de eliminar — Configuración — {{ sistema }}{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'configuracion:index' %}" class="pequeno">← Configuración</a>
+    <h1>🗑️ Pendientes de eliminar</h1>
+    <div class="subtitulo">
+      Documentos que alguien marcó porque no van. Siguen en el expediente
+      hasta que se confirme acá.
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <p class="pequeno mut">
+    {% if dias %}
+      Los marcados pasan solos a la papelera a los <strong>{{ dias }} día{{ dias|pluralize }}</strong>.
+      Van a la papelera, no se pierden: se restauran desde el expediente.
+    {% else %}
+      No hay plazo automático: cada uno espera acá hasta que alguien decida.
+    {% endif %}
+    <a href="{% url 'configuracion:preferencias' %}">Cambiar el plazo</a>
+  </p>
+
+  {% if documentos %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead>
+        <tr>
+          <th>Trabajador</th>
+          <th>Documento</th>
+          <th>Motivo</th>
+          <th>Marcado por</th>
+          <th>Se borra</th>
+          <th class="acciones"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in documentos %}
+        <tr>
+          <td>
+            <a href="{% url 'expedientes:trabajador_detail' fila.doc.trabajador.pk %}">
+              <strong>{{ fila.doc.trabajador.apellidos }} {{ fila.doc.trabajador.nombres }}</strong>
+            </a>
+            <div class="pequeno mut">{{ fila.doc.trabajador.sede|default:"—" }}</div>
+          </td>
+          <td>
+            {{ fila.doc.tipo }}
+            <div class="pequeno mut">{{ fila.doc.nombre_original|default:fila.doc.archivo.name }}</div>
+          </td>
+          <td class="pequeno">{{ fila.doc.motivo_marca|default:"—" }}</td>
+          <td class="pequeno">
+            {{ fila.doc.marcado_por.get_full_name|default:fila.doc.marcado_por.username|default:"—" }}
+            <div class="mut">{{ fila.doc.marcado_en|date:"d/m/Y H:i" }}</div>
+          </td>
+          <td class="pequeno">
+            {% if fila.se_borra_el %}
+              <span class="badge amarillo">{{ fila.se_borra_el|date:"d/m/Y" }}</span>
+            {% else %}
+              <span class="mut">Sin plazo</span>
+            {% endif %}
+          </td>
+          <td class="acciones">
+            <div class="acciones-fila">
+            <a class="btn sec chico"
+               href="{% url 'expedientes:documento_descargar' fila.doc.pk %}"
+               target="_blank">Ver</a>
+
+            <form method="post" action="{% url 'expedientes:documento_desmarcar' fila.doc.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="volver" value="{{ request.get_full_path }}">
+              <button class="btn sec chico" type="submit"
+                      title="Sacar la marca: el documento se queda en el expediente">
+                Se queda
+              </button>
+            </form>
+
+            <form method="post" action="{% url 'expedientes:documento_borrar' fila.doc.pk %}"
+                  onsubmit="return confirm('¿Enviar este documento a la papelera?')">
+              {% csrf_token %}
+              <input type="hidden" name="volver" value="{{ request.get_full_path }}">
+              <button class="btn peligro chico" type="submit">Eliminar</button>
+            </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="mut">No hay ningún documento marcado para eliminar.</p>
+  {% endif %}
+</div>
+{% endblock %}

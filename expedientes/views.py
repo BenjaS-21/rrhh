@@ -13,7 +13,7 @@ from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.utils.http import content_disposition_header
+from django.utils.http import content_disposition_header, url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import documentos as generador
@@ -724,6 +724,62 @@ def documento_descargar(request, pk):
     return respuesta
 
 
+def _volver(request, por_defecto, *args):
+    """A dónde volver después de una acción sobre un documento.
+
+    La misma acción se dispara desde dos lados —el expediente y la lista de
+    pendientes de Configuración— y cada uno tiene que volver a lo suyo. El
+    destino llega en el formulario, así que se valida igual que el `next` del
+    login: solo se acepta una dirección de este mismo sistema.
+    """
+    destino = request.POST.get("volver")
+    if destino and url_has_allowed_host_and_scheme(
+            url=destino, allowed_hosts={request.get_host()},
+            require_https=request.is_secure()):
+        return redirect(destino)
+    return redirect(por_defecto, *args)
+
+
+@login_required
+@require_POST
+def documento_marcar(request, pk):
+    """Pedir que se elimine un documento. No lo borra: lo deja en la lista.
+
+    Lo puede hacer quien puede subir. Es la mitad que faltaba: hasta ahora
+    quien se daba cuenta de que subió el archivo equivocado no tenía forma de
+    decirlo, y borrar sigue siendo del Administrador.
+    """
+    doc = get_object_or_404(Documento.objects.select_related("trabajador"), pk=pk)
+    exigir_editar_trabajador(request.user, doc.trabajador)
+
+    doc.marcar(request.user, request.POST.get("motivo", ""))
+    registrar(request, RegistroAuditoria.Accion.EDITAR, entidad="Documento",
+              objeto_id=doc.pk,
+              descripcion=f"Marcó para eliminar '{doc.tipo}' de {doc.trabajador}"
+                          + (f": {doc.motivo_marca}" if doc.motivo_marca else ""))
+    messages.warning(
+        request,
+        "Documento marcado para eliminar. Queda en el expediente hasta que el "
+        "Administrador lo confirme desde Configuración.")
+    return _volver(request, "expedientes:trabajador_detail", doc.trabajador_id)
+
+
+@login_required
+@require_POST
+def documento_desmarcar(request, pk):
+    """El «en caso tal»: sacar la marca."""
+    doc = get_object_or_404(Documento.objects.select_related("trabajador"), pk=pk)
+    exigir_editar_trabajador(request.user, doc.trabajador)
+
+    doc.desmarcar()
+    registrar(request, RegistroAuditoria.Accion.EDITAR, entidad="Documento",
+              objeto_id=doc.pk,
+              descripcion=f"Quitó la marca de eliminar de '{doc.tipo}' "
+                          f"de {doc.trabajador}")
+    messages.success(request, "Se quitó la marca: el documento se queda.")
+    return _volver(request, "expedientes:trabajador_detail", doc.trabajador_id)
+
+
 @login_required
 @require_POST
 def documento_borrar(request, pk):
@@ -737,7 +793,7 @@ def documento_borrar(request, pk):
               objeto_id=doc.pk,
               descripcion=f"Envió a papelera '{doc.tipo}' de {doc.trabajador}")
     messages.warning(request, "Documento enviado a la papelera.")
-    return redirect("expedientes:trabajador_detail", pk=doc.trabajador_id)
+    return _volver(request, "expedientes:trabajador_detail", doc.trabajador_id)
 
 
 @login_required

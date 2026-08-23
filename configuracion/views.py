@@ -17,6 +17,7 @@ from django.views.decorators.http import require_POST
 from cuentas.models import Area, Cargo, Departamento, Sede, Zona
 from expedientes.auditoria import registrar
 from expedientes.models import ConceptoPago, Moneda, RegistroAuditoria, TipoDocumento
+from expedientes.purga import barrer, pendientes
 
 from .forms import (
     AreaForm, CargoForm, ConceptoPagoForm, DepartamentoForm, MonedaForm,
@@ -144,6 +145,37 @@ def index(request):
     return render(request, "configuracion/index.html", {
         "tarjetas": tarjetas,
         "preferencias": Preferencias.obtener(),
+        # Con el número a la vista no hace falta entrar a la pantalla para
+        # enterarse de que alguien está esperando una respuesta.
+        "cuantos_pendientes": pendientes().count(),
+    })
+
+
+@admin_requerido
+def pendientes_de_eliminar(request):
+    """Los documentos que alguien marcó para eliminar, esperando decisión.
+
+    Barre primero: si el Administrador puso un plazo, los que ya lo cumplieron
+    tienen que estar en la papelera antes de dibujar la lista. Si no, quedan
+    a la vista como pendientes cuando en realidad su plazo ya pasó, y el
+    número de arriba miente.
+    """
+    barridos = barrer()
+    if barridos:
+        messages.info(
+            request,
+            f"{barridos} documento/s con el plazo cumplido pasaron a la papelera.")
+
+    prefs = Preferencias.obtener()
+    dias = prefs.dias_para_eliminar_marcados
+    documentos = [
+        {"doc": d, "se_borra_el": d.se_borra_el(dias)}
+        for d in pendientes()
+    ]
+    return render(request, "configuracion/pendientes.html", {
+        "documentos": documentos,
+        "dias": dias,
+        "preferencias": prefs,
     })
 
 

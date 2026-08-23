@@ -278,7 +278,15 @@
       <tbody>
         {% for d in documentos %}
         <tr>
-          <td><strong>{{ d.tipo }}</strong> {% if d.version > 1 %}<span class="badge gris">v{{ d.version }}</span>{% endif %}</td>
+          <td>
+            <strong>{{ d.tipo }}</strong>
+            {% if d.version > 1 %}<span class="badge gris">v{{ d.version }}</span>{% endif %}
+            {% if d.marcado %}
+              <span class="badge rojo" title="{{ d.motivo_marca|default:'Sin motivo anotado' }}">
+                Marcado para eliminar
+              </span>
+            {% endif %}
+          </td>
           <td class="pequeno mut">{{ d.nombre_original|default:d.archivo.name }}</td>
           <td>
             {% if d.fecha_vencimiento %}
@@ -289,8 +297,26 @@
           </td>
           <td class="pequeno">{{ d.subido_por.get_full_name|default:d.subido_por.username|default:"—" }}</td>
           <td class="pequeno mut">{{ d.subido_en|date:"d/m/Y H:i" }}</td>
-          <td class="flex" style="gap:.35rem">
+          {# Con tres botones no entran en una linea en el telefono: que bajen. #}
+          <td class="flex" style="gap:.35rem; flex-wrap:wrap">
             <a class="btn sec chico" href="{% url 'expedientes:documento_descargar' d.pk %}" target="_blank">Ver</a>
+            {% if user.puede_editar %}
+              {% if d.marcado %}
+              <form method="post" action="{% url 'expedientes:documento_desmarcar' d.pk %}">
+                {% csrf_token %}
+                <button class="btn sec chico" type="submit"
+                        title="Sacar la marca: el documento se queda">Se queda</button>
+              </form>
+              {% else %}
+              <form method="post" action="{% url 'expedientes:documento_marcar' d.pk %}">
+                {% csrf_token %}
+                <button class="btn sec chico" type="submit"
+                        title="Pedir que lo eliminen. No lo borra: queda avisado en Configuración.">
+                  Pedir eliminar
+                </button>
+              </form>
+              {% endif %}
+            {% endif %}
             {% if user.puede_borrar %}
             <form method="post" action="{% url 'expedientes:documento_borrar' d.pk %}"
                   onsubmit="return confirm('¿Enviar este documento a la papelera?')">

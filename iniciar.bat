@@ -34,6 +34,13 @@ if errorlevel 1 (
 )
 echo.
 
+REM Barre los documentos marcados para eliminar a los que se les cumplio el
+REM plazo que puso el Administrador. La lista de Configuracion tambien barre
+REM sola al abrirse, pero eso depende de que alguien la abra. Si esto falla no
+REM se frena el arranque: es limpieza, no algo que impida trabajar.
+".venv\Scripts\python.exe" manage.py purgar_marcados
+echo.
+
 echo Iniciando servidor...
 echo.
 echo   Publico: https://rrhh.aplicacionesdamasco.com/  (via tunel Cloudflare)

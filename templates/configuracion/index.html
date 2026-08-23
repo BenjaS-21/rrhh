@@ -31,6 +31,17 @@ que ya estaba cargado había que adivinar que el nombre era un enlace.
   {% endfor %}
 
   <div class="catalogo">
+    <div class="catalogo__icono">🗑️</div>
+    <a class="catalogo__nombre" href="{% url 'configuracion:pendientes' %}">Pendientes de eliminar</a>
+    <div class="catalogo__dato">
+      {% if cuantos_pendientes %}
+        {{ cuantos_pendientes }} documento{{ cuantos_pendientes|pluralize }} esperando decisión
+      {% else %}Nada marcado{% endif %}
+    </div>
+    <a class="btn sec chico" href="{% url 'configuracion:pendientes' %}">Ver listado</a>
+  </div>
+
+  <div class="catalogo">
     <div class="catalogo__icono">⚙️</div>
     <a class="catalogo__nombre" href="{% url 'configuracion:preferencias' %}">Opciones del sistema</a>
     <div class="catalogo__dato">

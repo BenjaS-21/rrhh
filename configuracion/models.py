@@ -22,6 +22,19 @@ class Preferencias(models.Model):
                   "hacer: borrar sigue siendo solo del Administrador.",
     )
 
+    dias_para_eliminar_marcados = models.PositiveIntegerField(
+        "Días para eliminar los documentos marcados",
+        default=0,
+        # Vacío vale: es «sin plazo». Obligar a escribir un 0 para decir «no
+        # quiero que se borre solo» es pedir que se declare lo que ya es.
+        blank=True,
+        help_text="Cuántos días esperar antes de que un documento marcado para "
+                  "eliminar se vaya solo a la papelera. En 0 no se borra nada "
+                  "solo: la lista de pendientes queda esperando que alguien "
+                  "decida. Va a la papelera, no se pierde: el Administrador "
+                  "puede restaurarlo desde el expediente.",
+    )
+
     actualizado_en = models.DateTimeField(auto_now=True)
     actualizado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,

@@ -126,4 +126,12 @@ class PreferenciasForm(_BaseForm):
 
     class Meta:
         model = Preferencias
-        fields = ["restringir_por_zona"]
+        fields = ["restringir_por_zona", "dias_para_eliminar_marcados"]
+
+    def clean_dias_para_eliminar_marcados(self):
+        """Dejarlo en blanco es decir «sin plazo», o sea 0.
+
+        La columna no admite nulos, así que sin esto un campo vacío revienta al
+        guardar en vez de significar lo evidente.
+        """
+        return self.cleaned_data.get("dias_para_eliminar_marcados") or 0

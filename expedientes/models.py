@@ -212,16 +212,59 @@ class Documento(models.Model):
     )
     subido_en = models.DateTimeField(auto_now_add=True)
 
+    # --- Marcado para eliminar -------------------------------------------------
+    # Borrar sigue siendo del Administrador. Pero quien sube el archivo es quien
+    # se da cuenta en el momento de que subió el que no era, y hasta ahora no
+    # tenía forma de decirlo: el documento equivocado se quedaba en el
+    # expediente hasta que alguien más lo mirara. Marcar no borra nada, avisa.
+    marcado_en = models.DateTimeField(null=True, blank=True)
+    marcado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="documentos_marcados",
+    )
+    motivo_marca = models.CharField(max_length=255, blank=True)
+
     class Meta:
         verbose_name = "documento"
         verbose_name_plural = "documentos"
         ordering = ["-subido_en"]
         indexes = [
             models.Index(fields=["trabajador", "tipo", "activo"]),
+            # La lista de pendientes los busca por acá, y el barrido automático
+            # también: sin índice, cada visita recorre todos los documentos.
+            models.Index(fields=["marcado_en", "activo"]),
         ]
 
     def __str__(self):
         return f"{self.tipo} — {self.trabajador} (v{self.version})"
+
+    @property
+    def marcado(self):
+        return self.marcado_en is not None
+
+    def marcar(self, usuario, motivo=""):
+        """Lo deja pedido para eliminar. No lo saca de la vista de nadie."""
+        self.marcado_en = timezone.now()
+        self.marcado_por = usuario
+        self.motivo_marca = (motivo or "").strip()[:255]
+        self.save(update_fields=["marcado_en", "marcado_por", "motivo_marca"])
+
+    def desmarcar(self):
+        """Vuelve atrás la marca. Es el «en caso tal» de haberse equivocado."""
+        self.marcado_en = None
+        self.marcado_por = None
+        self.motivo_marca = ""
+        self.save(update_fields=["marcado_en", "marcado_por", "motivo_marca"])
+
+    def se_borra_el(self, dias):
+        """Cuándo lo va a barrer solo el sistema, o None si no hay plazo.
+
+        `dias` en 0 significa que no se borra nada solo: la lista queda como
+        una bandeja de pendientes y decide una persona.
+        """
+        if not self.marcado_en or not dias:
+            return None
+        return self.marcado_en + timedelta(days=dias)
 
     @property
     def extension(self):

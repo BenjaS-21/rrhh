@@ -268,6 +268,27 @@ table.datos tbody tr:hover td { background: rgba(225,5,45,.04); }
 /* Los dos destinos de la tarjeta, uno al lado del otro. En el telefono no
    entran en una linea, asi que bajan en vez de encogerse y cortar el texto. */
 .catalogo__acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+/* Las acciones de una fila de tabla: se leen juntas o no se leen. En el
+   telefono la tabla ya se desliza de costado; envolverlas ademas las parte en
+   tres renglones y deja los botones cortados por la mitad, justo los que
+   importan. Se mantienen en linea y se llega a ellos deslizando. */
+/* Las acciones de una fila de tabla, pegadas al borde derecho mientras el
+   resto se desliza por debajo. En un telefono la tabla no entra y hay que
+   deslizarla: sin esto, los botones son justo lo que queda afuera de la
+   pantalla, o sea que la pagina se ve pero no se puede usar.
+
+   El sticky va en la CELDA y el flex en un div adentro. Poniendo `display:flex`
+   en el propio `td` deja de comportarse como celda: no toma el alto de la fila
+   y el texto de las columnas de al lado se lee por detras de los botones. */
+th.acciones, td.acciones {
+  position: sticky; right: 0; z-index: 1;
+  background: var(--surface);
+  box-shadow: -8px 0 8px -8px rgba(0,0,0,.18);
+}
+table.datos tbody tr:hover td.acciones { background: var(--surface); }
+.acciones-fila { display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; }
+.acciones-fila form { margin: 0; }
+.acciones-fila .btn { white-space: nowrap; }
 .catalogo__acciones .btn { margin-top: 0; }
 
 /* Dos campos en una casilla: el tipo de cedula y la cedula.
