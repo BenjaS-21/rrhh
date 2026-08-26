@@ -193,6 +193,9 @@ class Usuario(AbstractUser):
         # El alcance ya no viene con el rol (lo define la zona o `acceso_nacional`),
         # así que la etiqueta dice lo que el rol sí decide: qué puede hacer.
         RRHH_INTERIOR = "RRHH_INTERIOR", "RRHH Interior (carga y edita)"
+        # Mismos permisos que RRHH Interior: existe como rol aparte para
+        # distinguir al personal de Gestión Humana de la Sede Central.
+        RRHH_PRINCIPAL = "RRHH_PRINCIPAL", "RRHH Principal (carga y edita)"
         SOLO_LECTURA = "SOLO_LECTURA", "Solo lectura"
 
     rol = models.CharField(
@@ -244,13 +247,17 @@ class Usuario(AbstractUser):
         return self.rol == self.Rol.RRHH_INTERIOR
 
     @property
+    def es_principal(self) -> bool:
+        return self.rol == self.Rol.RRHH_PRINCIPAL
+
+    @property
     def es_solo_lectura(self) -> bool:
         return self.rol == self.Rol.SOLO_LECTURA
 
     @property
     def puede_editar(self) -> bool:
-        """¿Puede crear/editar/subir? Solo Admin y RRHH Interior."""
-        return self.es_admin or self.es_interior
+        """¿Puede crear/editar/subir? Admin, RRHH Interior y RRHH Principal."""
+        return self.es_admin or self.es_interior or self.es_principal
 
     @property
     def puede_borrar(self) -> bool:

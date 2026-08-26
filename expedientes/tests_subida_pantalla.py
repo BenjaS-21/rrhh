@@ -1,8 +1,10 @@
 """El indicador de subida, manejado en un Chrome de verdad.
 
 Lo que se prueba es el momento en que la persona elige el archivo: si pesa
-demasiado, tiene que enterarse ahí —con el archivo a mano para cambiarlo— y no
-después de diez minutos subiendo por la conexión de la tienda.
+demasiado, la pantalla le ofrece comprimirlo ahí —con el archivo a mano— en
+vez de dejar que suba 25 MB por la conexión de la tienda sin saber que podía
+ser más rápido. No se prueba que FRENE la subida, porque ya no la frena: el
+archivo entra igual; la compresión es una oferta, no un peaje.
 
 Se maneja el `<input type=file>` de verdad, con `DataTransfer`, porque poner un
 archivo ahí es justo lo que el navegador no deja hacer de cualquier manera: si
@@ -55,11 +57,13 @@ window.addEventListener("load", function () {
   function mirar() {
     var panel = formulario.querySelector(".subida");
     var estado = formulario.querySelector(".subida__estado");
+    var comprimir = formulario.querySelector(".subida__comprimir");
     return {
       hay: !!panel,
       visible: !!panel && !panel.hidden,
       mal: !!panel && panel.classList.contains("subida--mal"),
       texto: estado ? estado.textContent : "",
+      ofreceComprimir: !!comprimir && !comprimir.hidden,
       botonTrabado: formulario.querySelector('button[type="submit"]').disabled
     };
   }
@@ -137,17 +141,19 @@ class AvisaAntesDeSubir(TestCase):
         self.assertFalse(chico["visible"])
         self.assertFalse(chico["botonTrabado"])
 
-    def test_con_uno_demasiado_grande_avisa_al_elegirlo(self):
+    def test_con_uno_demasiado_grande_ofrece_comprimir_al_elegirlo(self):
         grande = self.medida()["grande"]
         self.assertTrue(grande["visible"], "eligio un archivo grande y no dijo nada")
-        self.assertTrue(grande["mal"])
-        self.assertIn("máximo", grande["texto"])
+        self.assertFalse(grande["mal"], "lo mostro como error: es una oferta, no un rechazo")
+        self.assertTrue(grande["ofreceComprimir"], "no aparecio el boton de comprimir")
 
-    def test_el_aviso_dice_cuanto_pesa_y_cuanto_entra(self):
-        self.assertRegex(self.medida()["grande"]["texto"], r"\d+,\d+ MB")
+    def test_el_aviso_dice_cuanto_pesa_y_que_entra_igual(self):
+        texto = self.medida()["grande"]["texto"]
+        self.assertRegex(texto, r"\d+,\d+ MB")
+        self.assertIn("Se sube igual", texto)
 
-    def test_al_cambiarlo_por_uno_bueno_el_aviso_se_va(self):
-        """Un error que no se borra deja pensando que sigue estando mal."""
+    def test_al_cambiarlo_por_uno_chico_el_aviso_se_va(self):
+        """Un aviso que no se borra deja pensando que sigue estando mal."""
         de_nuevo = self.medida()["deNuevoChico"]
         self.assertFalse(de_nuevo["visible"])
         self.assertFalse(de_nuevo["mal"])

@@ -162,3 +162,65 @@ class CuandoNoSeGuardaSeNota(TestCase):
         cuerpo = r.content.decode()
         self.assertIn('value="Ana"', cuerpo)
         self.assertIn('value="2025-03-01"', cuerpo)
+
+
+class ElRifEsOpcionalYQuedaEnLaFicha(TestCase):
+    """El RIF se pidió aparte de la cédula: opcional, debajo de ella en el
+    formulario, y visible en la ficha solo cuando está cargado."""
+
+    @classmethod
+    def setUpTestData(cls):
+        zona = Zona.objects.create(nombre="MIRANDA")
+        cls.sede = Sede.objects.create(nombre="TRINIDAD", zona=zona)
+        cls.admin = Usuario.objects.create_user(username="adm", password=CLAVE)
+        cls.admin.rol = Usuario.Rol.ADMIN
+        cls.admin.save()
+
+    def alta(self, **cambios):
+        datos = {"documento_identidad": "V-30719983", "nombres": "Benjamin",
+                 "apellidos": "Velazco", "sede": self.sede.pk}
+        datos.update(cambios)
+        self.client.force_login(self.admin)
+        return self.client.post(reverse("expedientes:trabajador_create"), datos)
+
+    def detalle(self):
+        t = Trabajador.objects.get()
+        self.client.force_login(self.admin)
+        return self.client.get(
+            reverse("expedientes:trabajador_detail", args=[t.pk])).content.decode()
+
+    def test_se_guarda_en_el_alta(self):
+        self.alta(rif="J-30719983-1")
+        self.assertEqual(Trabajador.objects.get().rif, "J-30719983-1")
+
+    def test_sin_rif_tambien_se_puede(self):
+        r = self.alta()
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Trabajador.objects.get().rif, "")
+
+    def test_en_el_formulario_va_debajo_de_la_cedula(self):
+        self.client.force_login(self.admin)
+        cuerpo = self.client.get(
+            reverse("expedientes:trabajador_create")).content.decode()
+        self.assertLess(cuerpo.index('name="documento_identidad"'),
+                        cuerpo.index('name="rif"'))
+
+    def test_al_editar_se_carga(self):
+        self.alta()
+        t = Trabajador.objects.get()
+        self.client.force_login(self.admin)
+        self.client.post(
+            reverse("expedientes:trabajador_update", args=[t.pk]),
+            {"documento_identidad": t.documento_identidad, "nombres": "Benjamin",
+             "apellidos": "Velazco", "sede": self.sede.pk, "estado": "ACTIVO",
+             "rif": "J-30719983-1"})
+        t.refresh_from_db()
+        self.assertEqual(t.rif, "J-30719983-1")
+
+    def test_en_el_detalle_se_ve_cuando_tiene(self):
+        self.alta(rif="J-30719983-1")
+        self.assertIn("J-30719983-1", self.detalle())
+
+    def test_en_el_detalle_no_sale_cuando_esta_vacio(self):
+        self.alta()
+        self.assertNotIn("<th>RIF</th>", self.detalle())

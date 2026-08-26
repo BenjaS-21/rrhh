@@ -19,6 +19,7 @@ from django.views.decorators.http import require_POST
 from . import documentos as generador
 from . import pdf as conversor
 from .auditoria import registrar
+from .compresion import NoSePudoComprimir, comprimir_imagen, comprimir_pdf
 from .completitud import completitud
 from .forms import (
     BonoExtraForm, DatosContratacionForm, DocumentoForm, EscaneoForm,
@@ -92,6 +93,7 @@ def trabajador_list(request):
         q = form.cleaned_data.get("q")
         sedes = form.cleaned_data.get("sedes")
         estado = form.cleaned_data.get("estado")
+        docs = form.cleaned_data.get("docs")
         if q:
             qs = qs.filter(
                 Q(nombres__icontains=q)
@@ -102,6 +104,8 @@ def trabajador_list(request):
             qs = qs.filter(sede__in=sedes)
         if estado:
             qs = qs.filter(estado=estado)
+        if docs not in (None, ""):
+            qs = qs.filter(cant_docs=int(docs))
 
     paginador = Paginator(qs, 15)
     pagina = paginador.get_page(request.GET.get("page"))
@@ -382,7 +386,7 @@ def _secciones_expediente(form, form_contrato):
          # La tupla dice "estos dos van juntos en una sola casilla": el tipo
          # es una letra y no merece media pantalla, y separado de la cédula se
          # lee como otro dato en vez de como su prefijo.
-         [("tipo_documento", "documento_identidad"), "nombres", "apellidos",
+         [("tipo_documento", "documento_identidad"), "rif", "nombres", "apellidos",
           "fecha_nacimiento", "telefono", "email"],
          ["ciudad_nacimiento", "estado_civil", "direccion"],
          "La edad y el día/mes/año de nacimiento se calculan solos a partir "
@@ -561,6 +565,35 @@ def trabajador_update(request, pk):
 
 @login_required
 @require_POST
+def trabajador_estado(request, pk):
+    """Da de baja o reactiva el expediente. No se borra nada: solo cambia
+    cómo cuenta en los listados (activo o baja)."""
+    trabajador = get_object_or_404(Trabajador, pk=pk)
+    exigir_editar_trabajador(request.user, trabajador)
+
+    if trabajador.estado == Trabajador.Estado.ACTIVO:
+        trabajador.estado = Trabajador.Estado.BAJA
+        trabajador.observaciones_baja = request.POST.get("observaciones", "").strip()[:400]
+        accion = "Dio de baja"
+    else:
+        trabajador.estado = Trabajador.Estado.ACTIVO
+        # Se limpia: la ficha muestra la baja vigente, y la anterior ya quedó
+        # asentada en la auditoría con su texto.
+        trabajador.observaciones_baja = ""
+        accion = "Reactivó"
+    trabajador.save(update_fields=["estado", "observaciones_baja", "actualizado_en"])
+
+    detalle = f"{accion} el expediente de {trabajador}"
+    if trabajador.observaciones_baja:
+        detalle += f". Observaciones: {trabajador.observaciones_baja}"
+    registrar(request, RegistroAuditoria.Accion.EDITAR, entidad="Trabajador",
+              objeto_id=trabajador.pk, descripcion=detalle)
+    messages.success(request, f"{accion} el expediente de {trabajador}.")
+    return redirect("expedientes:trabajador_detail", pk=trabajador.pk)
+
+
+@login_required
+@require_POST
 def hijo_agregar(request, pk):
     """Agrega un hijo al expediente."""
     trabajador = get_object_or_404(Trabajador.objects.select_related("sede"), pk=pk)
@@ -636,6 +669,78 @@ def documento_subir(request, pk):
         errores = "; ".join(f"{c}: {', '.join(e)}" for c, e in form.errors.items())
         messages.error(request, f"No se pudo subir el documento. {errores}")
     return redirect("expedientes:trabajador_detail", pk=trabajador.pk)
+
+
+@login_required
+@require_POST
+def documento_comprimir(request, pk):
+    """Recibe un documento que pasaba del tope, lo comprime y lo guarda.
+
+    Es la mitad servidor del botón "Comprimir aquí y subir": las imágenes se
+    comprimen en el navegador (ver `static/js/subida.js`), pero un PDF hay que
+    redibujarlo página por página y eso se hace acá, con PyMuPDF.
+
+    Responde JSON como el escáner: la pantalla no recarga. El archivo puede
+    llegar hasta COMPRESION_MAX_BYTES (el middleware abre esa excepción solo
+    para esta ruta), pero lo que se guarda queda por debajo de
+    DOCUMENTOS_MAX_BYTES o se rechaza.
+    """
+    from django.core.files.base import ContentFile
+
+    trabajador = get_object_or_404(Trabajador, pk=pk)
+    exigir_editar_trabajador(request.user, trabajador)
+
+    # EscaneoForm y no DocumentoForm: este archivo VIENE pasado del tope y el
+    # validador de tamaño del modelo lo rechazaría antes de poder comprimirlo.
+    form = EscaneoForm(request.POST)
+    if not form.is_valid():
+        errores = "; ".join(f"{c}: {', '.join(e)}" for c, e in form.errors.items())
+        return JsonResponse({"ok": False, "error": errores}, status=400)
+
+    subido = request.FILES.get("archivo")
+    if not subido:
+        return JsonResponse({"ok": False, "error": "No llegó ningún archivo."},
+                            status=400)
+    extension = os.path.splitext(subido.name)[1].lower()
+    try:
+        if extension == ".pdf":
+            # Con archivos grandes, mejor la ruta del temporal que la RAM.
+            ruta_temp = getattr(subido, "temporary_file_path", None)
+            datos = comprimir_pdf(ruta_temp() if ruta_temp else subido.read())
+        elif extension in {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp"}:
+            datos = comprimir_imagen(subido.read())
+            extension = ".jpg"
+        else:
+            return JsonResponse(
+                {"ok": False,
+                 "error": f"Los archivos '{extension}' no se pueden comprimir. "
+                          "Convertilo a PDF o a imagen y probá de nuevo."},
+                status=400)
+    except NoSePudoComprimir as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+
+    tipo = form.cleaned_data["tipo"]
+    version = _proxima_version(trabajador, tipo)
+    doc = Documento(
+        trabajador=trabajador, tipo=tipo, subido_por=request.user,
+        fecha_vencimiento=form.cleaned_data.get("fecha_vencimiento"),
+        observaciones=form.cleaned_data.get("observaciones", ""),
+        version=version, tamano_bytes=len(datos),
+    )
+    doc.nombre_original = (os.path.splitext(subido.name)[0][:250] + extension)
+    doc.archivo.save(doc.nombre_original, ContentFile(datos), save=False)
+    doc.save()
+
+    def _mb(n):
+        return f"{n / 1024 / 1024:.1f}".replace(".", ",") + " MB"
+
+    registrar(request, RegistroAuditoria.Accion.SUBIR, entidad="Documento",
+              objeto_id=doc.pk,
+              descripcion=f"Subió '{tipo}' (v{version}) a {trabajador} "
+                          f"(comprimido de {_mb(subido.size)} a {_mb(len(datos))})")
+    messages.success(
+        request, f"Documento '{tipo}' comprimido y cargado (v{version}).")
+    return JsonResponse({"ok": True, "documento": doc.pk})
 
 
 @login_required

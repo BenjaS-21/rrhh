@@ -4,11 +4,29 @@ from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import redirect
+from django.urls import Resolver404, resolve
 from django.utils.http import url_has_allowed_host_and_scheme
 
 
 def _texto_mb(n):
     return f"{n / 1024 / 1024:.0f} MB"
+
+
+def _tope_para(request):
+    """Cuánto se admite recibir en ESTA petición.
+
+    La ruta de compresión es la única excepción: para comprimir un documento
+    pesado hay que recibirlo entero primero, así que ahí manda
+    `COMPRESION_MAX_BYTES`. Todo lo demás sigue con `SUBIDA_MAX_BYTES`.
+    """
+    compresion = getattr(settings, "COMPRESION_MAX_BYTES", 0)
+    if compresion:
+        try:
+            if resolve(request.path_info).url_name == "documento_comprimir":
+                return compresion
+        except Resolver404:
+            pass
+    return getattr(settings, "SUBIDA_MAX_BYTES", 0)
 
 
 class LimitarTamanoDeSubida:
@@ -32,7 +50,7 @@ class LimitarTamanoDeSubida:
         self.get_response = get_response
 
     def __call__(self, request):
-        tope = getattr(settings, "SUBIDA_MAX_BYTES", 0)
+        tope = _tope_para(request)
         if tope and request.method in ("POST", "PUT", "PATCH"):
             try:
                 largo = int(request.META.get("CONTENT_LENGTH") or 0)
@@ -43,9 +61,11 @@ class LimitarTamanoDeSubida:
         return self.get_response(request)
 
     def _negar(self, request, largo, tope):
-        maximo = getattr(settings, "DOCUMENTOS_MAX_BYTES", tope)
-        detalle = (f"Lo que mandaste pesa {_texto_mb(largo)} y el máximo por "
-                   f"documento es {_texto_mb(maximo)}.")
+        # Acá solo se llega pasando el techo absoluto (80 MB de fábrica), no un
+        # límite de documento: cualquier archivo razonable entra.
+        detalle = (f"Lo que mandaste pesa {_texto_mb(largo)} y el máximo que se "
+                   f"admite recibir es {_texto_mb(tope)}. Subilo partido en "
+                   "varios documentos.")
 
         # El escáner y todo lo que va por HTMX esperan una respuesta, no una
         # página nueva: si se les manda un redirect, el error no se ve.

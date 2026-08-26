@@ -16,6 +16,28 @@
   <div class="flex wrap">
     {% if user.puede_editar %}
       <a class="btn sec" href="{% url 'expedientes:trabajador_update' trabajador.pk %}">Editar datos</a>
+      {% if trabajador.estado == "ACTIVO" %}
+        <details class="baja-form">
+          <summary class="btn peligro">Dar de baja</summary>
+          <form method="post" action="{% url 'expedientes:trabajador_estado' trabajador.pk %}"
+                style="margin-top:.5rem"
+                onsubmit="return confirm('¿Dar de baja el expediente de {{ trabajador.nombre_completo|escapejs }}? No se borra nada: deja de aparecer como activo.')">
+            {% csrf_token %}
+            <div class="campo mb0">
+              <label for="observaciones_baja">Observaciones</label>
+              <textarea id="observaciones_baja" name="observaciones" rows="3" maxlength="400"
+                        placeholder="Motivo: renuncia, despido, fin de contrato… (opcional)"></textarea>
+            </div>
+            <button class="btn peligro chico" type="submit" style="margin-top:.5rem">Confirmar baja</button>
+          </form>
+        </details>
+      {% else %}
+        <form method="post" action="{% url 'expedientes:trabajador_estado' trabajador.pk %}"
+              onsubmit="return confirm('¿Reactivar el expediente de {{ trabajador.nombre_completo|escapejs }}?')">
+          {% csrf_token %}
+          <button class="btn sec" type="submit">Reactivar</button>
+        </form>
+      {% endif %}
     {% endif %}
     {% if user.es_admin %}
       <a class="btn sec" href="{% url 'expedientes:papelera' trabajador.pk %}">Papelera</a>
@@ -29,6 +51,7 @@
     <h2>Datos del trabajador</h2>
     <div class="tabla-scroll">
       <table class="datos">
+        {% if trabajador.rif %}<tr><th>RIF</th><td>{{ trabajador.rif }}</td></tr>{% endif %}
         <tr><th>Cargo</th><td>{{ trabajador.puesto|default:"—" }}</td></tr>
         <tr><th>Unidad</th><td>{{ trabajador.departamento|default:"—" }}</td></tr>
         <tr><th>Email</th><td>{{ trabajador.email|default:"—" }}</td></tr>
@@ -36,6 +59,10 @@
         <tr><th>Nacimiento</th><td>{{ trabajador.fecha_nacimiento|date:"d/m/Y"|default:"—" }}</td></tr>
         <tr><th>Ingreso</th><td>{{ trabajador.fecha_ingreso|date:"d/m/Y"|default:"—" }}</td></tr>
         <tr><th>Tallas</th><td>{{ trabajador.contratacion.tallas|default:"—" }}</td></tr>
+        {% if trabajador.observaciones_baja and user.puede_editar %}
+          {% comment %}La baja es un dato de gestión: la ven Admin, RRHH Interior y RRHH Principal (los mismos que pueden darla). Solo lectura, no.{% endcomment %}
+          <tr><th>Baja</th><td>{{ trabajador.observaciones_baja }}</td></tr>
+        {% endif %}
       </table>
     </div>
   </div>
@@ -236,6 +263,7 @@
   los dos lados, tarde o temprano dirían cosas distintas.
   {% endcomment %}
   <form method="post" id="subir-documento" data-max-bytes="{{ documento_max_bytes }}"
+        data-comprimir-url="{% url 'expedientes:documento_comprimir' trabajador.pk %}"
         action="{% url 'expedientes:documento_subir' trabajador.pk %}"
         enctype="multipart/form-data">
     {% csrf_token %}
@@ -249,7 +277,8 @@
         {{ form_doc.archivo }}
         <div class="ayuda">
           Podés escanear con el celular y subir la foto o el PDF.
-          Hasta {{ documento_max_mb }} MB por archivo.
+          Si pesa más de {{ documento_max_mb }} MB te conviene comprimirlo aquí
+          mismo: va a subir más rápido.
         </div>
       </div>
       <div class="campo">

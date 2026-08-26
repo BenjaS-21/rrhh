@@ -1,0 +1,17 @@
+{% comment %}
+Al elegir un concepto del catálogo, propone su moneda automáticamente.
+La moneda queda editable: si este trabajador es una excepción, se cambia a mano.
+{% endcomment %}
+<script>
+  (function () {
+    var concepto = document.getElementById("id_pago-concepto");
+    var moneda = document.getElementById("id_pago-moneda");
+    if (!concepto || !moneda) { return; }
+
+    concepto.addEventListener("change", function () {
+      var opcion = concepto.options[concepto.selectedIndex];
+      var id = opcion && opcion.getAttribute("data-moneda");
+      if (id) { moneda.value = id; }
+    });
+  })();
+</script>

@@ -5,12 +5,12 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django import forms
-from django.db.models import Q
+from django.db.models import Count, Max, Q
 from django.utils import timezone
 
 from cuentas.models import Cargo, Departamento, Sede, TipoDocumentoIdentidad
 from cuentas.widgets import FechaInput, SelectCargo
-from .permisos import ve_todo_el_pais
+from .permisos import trabajadores_visibles, ve_todo_el_pais
 from .models import (
     AsignacionPago, ConceptoPago, DatosContratacion, Documento, Hijo, Moneda,
     TipoDocumento, Trabajador,
@@ -79,7 +79,7 @@ class TrabajadorForm(forms.ModelForm):
     class Meta:
         model = Trabajador
         fields = [
-            "tipo_documento", "documento_identidad", "nombres", "apellidos",
+            "tipo_documento", "documento_identidad", "rif", "nombres", "apellidos",
             "fecha_nacimiento",
             "email", "telefono", "sede", "departamento", "puesto",
             "fecha_ingreso", "estado",
@@ -565,12 +565,36 @@ class FiltroTrabajadorForm(forms.Form):
         choices=[("", "Todos los estados")] + list(Trabajador.Estado.choices),
         widget=forms.Select(attrs={"class": _SELECT}),
     )
+    docs = forms.ChoiceField(
+        required=False, label="Cantidad de documentos",
+        widget=forms.Select(attrs={"class": _SELECT}),
+    )
 
     def __init__(self, *args, usuario=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.usuario = usuario
         self.fields["sedes"].queryset = _tiendas_del_usuario(usuario)
         self._aceptar_sede_vieja()
+        self.fields["docs"].choices = (
+            [("", "Docs: todos")] + self._opciones_docs())
+
+    def _opciones_docs(self):
+        """Las cantidades detectadas entre los expedientes visibles: 0..max.
+
+        Se calcula en cada carga de pantalla: si mañana alguien llega a 7
+        documentos, el 7 aparece solo en el desplegable. Sirve sobre todo para
+        el otro extremo: ver cuáles expedientes quedaron con 0 documentos.
+        """
+        maximo = trabajadores_visibles(self.usuario).annotate(
+            cant=Count("documentos", filter=Q(documentos__activo=True))
+        ).aggregate(maximo=Max("cant"))["maximo"] or 0
+        opciones = [(str(n), str(n)) for n in range(maximo + 1)]
+        # Un link guardado con una cantidad que ya no existe no puede romper
+        # los demás filtros: se acepta y simplemente no saldrá nadie.
+        valor = (self.data.get("docs") or "") if hasattr(self.data, "get") else ""
+        if valor.isdigit() and (valor, valor) not in opciones:
+            opciones.append((valor, valor))
+        return opciones
 
     def _aceptar_sede_vieja(self):
         """Traduce el `?sede=` de una sola tienda al `?sedes=` de ahora.

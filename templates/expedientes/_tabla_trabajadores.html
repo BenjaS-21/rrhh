@@ -1,4 +1,7 @@
 {% if pagina.object_list %}
+<div class="pequeno mut" style="margin-bottom:8px">
+  Mostrando {{ pagina.object_list|length }} de {{ pagina.paginator.count }} expediente{{ pagina.paginator.count|pluralize }}
+</div>
 <div class="tabla-scroll">
   <table class="datos">
     <thead>

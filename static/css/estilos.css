@@ -307,6 +307,30 @@ table.datos tbody tr:hover td.acciones { background: var(--surface); }
 .subida__porcentaje { font-variant-numeric: tabular-nums; color: var(--muted); }
 .subida--mal .subida__estado { color: var(--destructive); }
 .subida--mal .barra > span { background: var(--destructive); }
+.subida__comprimir { justify-self: start; }
+
+/* La espera sin porcentaje: una vez subido el archivo, el servidor todavia
+   tiene que comprimir y cifrar, y un cartel quieto ahi parece colgado. */
+.subida__rueda {
+  width: 14px; height: 14px; flex: none; align-self: center;
+  border: 2px solid var(--border);
+  border-top-color: var(--corporate-red);
+  border-radius: 50%;
+  animation: subida-girar .8s linear infinite;
+}
+@keyframes subida-girar { to { transform: rotate(360deg); } }
+.subida--procesando .barra > span {
+  width: 40% !important;
+  animation: subida-vaiven 1.2s ease-in-out infinite;
+}
+@keyframes subida-vaiven {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .subida__rueda, .subida--procesando .barra > span { animation: none; }
+}
 
 /* Barra de completitud */
 .barra { background: var(--border); border-radius: 999px; height: 10px; overflow: hidden; }
@@ -447,6 +471,12 @@ table.datos tbody tr:hover td.acciones { background: var(--surface); }
 }
 .multi[open] > summary { border-color: var(--primary-red); }
 .multi[open] > summary::after { content: "▴"; }
+
+/* Baja con observaciones: el botón despliega el motivo antes de confirmar. */
+.baja-form { max-width: 320px; }
+.baja-form > summary { list-style: none; cursor: pointer; display: inline-block; }
+.baja-form > summary::-webkit-details-marker { display: none; }
+
 .multi__panel {
   position: absolute; z-index: 20; top: calc(100% + 4px); left: 0;
   min-width: 260px; max-height: 320px; overflow-y: auto;

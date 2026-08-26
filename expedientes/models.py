@@ -31,24 +31,25 @@ def _validar_extension(archivo):
         )
 
 
-def _mb(n):
-    """Bytes a un texto que se entienda: 1572864 -> '1,5 MB'."""
-    return f"{n / 1024 / 1024:.1f}".replace(".", ",") + " MB"
+# No hay validador de tamaño a propósito. Lo hubo (20 MB), porque el cifrado se
+# hacía en memoria y una subida grande se llevaba puesto al servidor; desde que
+# el cifrado es por bloques (ver storage.py), la memoria ya no depende del
+# tamaño y el tope solo fastidiaba a las tiendas con escaneos pesados. Lo que
+# queda en pie: el middleware corta cualquier subida absurda (SUBIDA_MAX_BYTES)
+# antes de recibirla, y la pantalla OFRECE comprimir lo que pasa de
+# DOCUMENTOS_MAX_BYTES —lo ofrece, no lo exige—.
 
 
 def _validar_tamano(archivo):
-    """Un documento no puede pesar cualquier cosa.
+    """Sin uso: el campo `archivo` ya no lo valida.
 
-    No es capricho: el archivo se cifra en memoria antes de ir a disco, y sin
-    tope una subida grande se llevaba puesto al servidor entero. Está acá, en
-    el modelo, para que también valga por el admin y por cualquier script.
+    Queda únicamente porque las migraciones viejas la referencian y Django
+    necesita importarlas para correr. No la llama nadie más.
     """
     tope = settings.DOCUMENTOS_MAX_BYTES
     if archivo.size > tope:
         raise ValidationError(
-            f"El archivo pesa {_mb(archivo.size)} y el máximo es {_mb(tope)}. "
-            "Si es un PDF escaneado, volvé a escanearlo en blanco y negro o "
-            "con menos calidad; o subilo partido en varios documentos."
+            f"El archivo pesa {archivo.size / 1024 / 1024:.1f} MB.".replace(".", ",")
         )
 
 
@@ -76,6 +77,10 @@ class Trabajador(models.Model):
         "documento de identidad", max_length=30, unique=True,
         help_text="CI / DNI. Identifica de forma única al trabajador.",
     )
+    rif = models.CharField(
+        "RIF", max_length=20, blank=True,
+        help_text="Opcional. El registro fiscal (J-, G-…), distinto de la cédula.",
+    )
     nombres = models.CharField(max_length=120)
     apellidos = models.CharField(max_length=120)
     fecha_nacimiento = models.DateField(null=True, blank=True)
@@ -98,6 +103,11 @@ class Trabajador(models.Model):
     )
     fecha_ingreso = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.ACTIVO)
+    observaciones_baja = models.CharField(
+        "observaciones de la baja", max_length=400, blank=True,
+        help_text="Motivo o notas cargadas al dar de baja. Se limpia al "
+                  "reactivar; el historial queda en la auditoría.",
+    )
 
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
@@ -197,7 +207,7 @@ class Documento(models.Model):
     archivo = models.FileField(
         upload_to=_ruta_documento,
         storage=almacenamiento_documentos,
-        validators=[_validar_extension, _validar_tamano],
+        validators=[_validar_extension],
     )
     nombre_original = models.CharField(max_length=255, blank=True)
     tamano_bytes = models.PositiveBigIntegerField(default=0)

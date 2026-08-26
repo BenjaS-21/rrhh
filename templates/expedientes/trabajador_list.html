@@ -18,13 +18,14 @@
   <form class="grid-2" method="get"
         hx-get="{% url 'expedientes:trabajador_list' %}"
         hx-target="#tabla-trabajadores"
-        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_estado"
+        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_estado, change from:#id_docs"
         hx-push-url="true"
         hx-indicator="#cargando">
     <div class="campo mb0">{{ form.q }}</div>
     <div class="flex" style="gap:.6rem">
       {% include "expedientes/_filtro_tiendas.html" %}
       {{ form.estado }}
+      {{ form.docs }}
     </div>
   </form>
   <span id="cargando" class="htmx-indicator pequeno mut">Buscando…</span>

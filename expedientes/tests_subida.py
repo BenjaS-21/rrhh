@@ -11,7 +11,13 @@ Se probaron tres cosas, que son las tres mitades del arreglo:
   - que el archivo vuelva a salir igual que como entró, incluidos los que ya
     estaban guardados con el formato viejo;
   - que la memoria NO dependa del tamaño del archivo;
-  - que un archivo demasiado grande se rechace, y se rechace temprano.
+  - que una subida absurda se corte temprano, en el middleware, antes de
+    recibir el cuerpo.
+
+Nota de vigencia: el límite de 20 MB por documento existió cuando el cifrado
+era en memoria. Con el cifrado por bloques dejó de hacer falta y se quitó:
+los archivos pesados entran tal cual (comprimir queda como oferta para que
+suban más rápido). Lo que sigue firme es el techo absoluto del middleware.
 """
 
 import os
@@ -201,25 +207,23 @@ class _ConExpediente(TestCase):
             follow=True)
 
 
-class UnArchivoDemasiadoGrandeSeRechaza(_ConExpediente):
+class UnArchivoGrandeYaNoSeRechaza(_ConExpediente):
+    """El tope de 20 MB se quitó: con el cifrado por bloques ya no hace falta.
+
+    Antes, un escaneo de 25 MB no entraba de ninguna manera sin comprimir;
+    ahora entra tal cual (comprimir queda como OFERTA para que suba más
+    rápido, no como peaje).
+    """
 
     @override_settings(DOCUMENTOS_MAX_BYTES=100_000)
-    def test_no_se_guarda_y_se_explica_cuanto_pesa(self):
-        r = self.subir(b"x" * 300_000)
-        self.assertEqual(Documento.objects.count(), 0)
-        cuerpo = r.content.decode()
-        self.assertIn("0,3 MB", cuerpo)
-        self.assertIn("0,1 MB", cuerpo)
+    def test_uno_que_pasa_del_umbral_se_guarda_igual(self):
+        """DOCUMENTOS_MAX_BYTES es hoy solo el umbral de la oferta de comprimir."""
+        self.subir(b"x" * 300_000)
+        doc = Documento.objects.get()
+        self.assertEqual(doc.tamano_bytes, 300_000)
 
-    @override_settings(DOCUMENTOS_MAX_BYTES=100_000)
-    def test_el_aviso_dice_que_hacer(self):
-        """Un «no se puede» sin salida deja a la persona igual de trabada."""
-        cuerpo = self.subir(b"x" * 300_000).content.decode()
-        self.assertIn("menos calidad", cuerpo)
-
-    @override_settings(DOCUMENTOS_MAX_BYTES=100_000)
     def test_uno_que_entra_si_se_guarda(self):
-        """Testigo: si rechazara todo, los de arriba no probarían el límite."""
+        """Testigo: que no se rompió la subida normal."""
         self.subir(b"x" * 50_000)
         self.assertEqual(Documento.objects.count(), 1)
         self.assertEqual(Documento.objects.get().tamano_bytes, 50_000)
@@ -280,7 +284,8 @@ class LaPantallaAvisaElLimite(_ConExpediente):
 
     def test_se_lo_dice_a_la_persona_en_megas(self):
         mb = settings.DOCUMENTOS_MAX_BYTES // 1024 // 1024
-        self.assertIn(f"Hasta {mb} MB por archivo", self.cuerpo())
+        self.assertIn(f"Si pesa más de {mb} MB te conviene comprimirlo",
+                      self.cuerpo())
 
     def test_carga_el_guion_que_muestra_el_progreso(self):
         self.assertIn("js/subida.js", self.cuerpo())

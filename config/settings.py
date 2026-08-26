@@ -206,14 +206,22 @@ STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else 
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media-privado-no-usar/"
 
-# Cuánto puede pesar un documento. Es el número que ve la persona en pantalla
-# y el que rechaza el servidor: si no coinciden, alguien sube 80 MB por la
-# conexión de la tienda para que recién al final le digan que no.
+# A partir de este tamaño la pantalla de carga OFRECE comprimir el archivo
+# (imágenes en el navegador, PDF en el servidor). Es solo una sugerencia para
+# que suba más rápido: NO se rechaza nada por pasarlo. También es el tamaño al
+# que apunta la compresión en el servidor (compresion.py).
 DOCUMENTOS_MAX_BYTES = 20 * 1024 * 1024
 
-# Cuánto se admite recibir en total, ya con el sobre del formulario. El margen
-# es para los otros campos y los límites de multipart.
-SUBIDA_MAX_BYTES = DOCUMENTOS_MAX_BYTES + 5 * 1024 * 1024
+# Techo absoluto de cualquier subida, ya con el sobre del formulario. No es un
+# límite de documento: es el corte de seguridad del middleware para no recibir
+# cuerpos absurdos (antes 25 MB; se subió porque los escaneos de las tiendas
+# lo pasaban y rebotaban).
+SUBIDA_MAX_BYTES = 80 * 1024 * 1024
+
+# Cuánto admite recibir la ruta de compresión. Quedó igual que el techo
+# general: la excepción del middleware sigue ahí por si algún día se baja
+# SUBIDA_MAX_BYTES, la compresión no se vería afectada.
+COMPRESION_MAX_BYTES = 80 * 1024 * 1024
 
 # Los datos que NO son archivo (los campos del formulario) siguen acotados.
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
