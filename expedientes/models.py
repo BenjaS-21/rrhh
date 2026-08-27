@@ -466,6 +466,27 @@ class DatosContratacion(models.Model):
         return " · ".join(partes)
 
 
+class MotivoContratacion(models.Model):
+    """Catálogo de motivos de contratación (las temporadas).
+
+    Alimenta el desplegable del campo «Motivo de contratación» en los datos de
+    contratación. Se administra desde Configuración: las temporadas cambian de
+    nombre cada tanto y no puede hacer falta un despliegue para agregar una.
+    """
+
+    nombre = models.CharField(max_length=150, unique=True)
+    activo = models.BooleanField(default=True)
+    orden = models.PositiveIntegerField(default=100)
+
+    class Meta:
+        verbose_name = "motivo de contratación"
+        verbose_name_plural = "motivos de contratación"
+        ordering = ["orden", "nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
 class Moneda(models.Model):
     """Moneda en la que se expresa un monto del expediente (Bs, $, €).
 

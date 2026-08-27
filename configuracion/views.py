@@ -4,24 +4,30 @@ Página propia (no el admin de Django) para crear/editar/activar los catálogos
 organizativos: Departamentos, Áreas, Zonas, Tiendas y Tipos de documento.
 """
 
+import os
+import sqlite3
+import tempfile
 from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from cuentas.models import Area, Cargo, Departamento, Sede, Zona
 from expedientes.auditoria import registrar
-from expedientes.models import ConceptoPago, Moneda, RegistroAuditoria, TipoDocumento
+from expedientes.models import (
+    ConceptoPago, Moneda, MotivoContratacion, RegistroAuditoria, TipoDocumento,
+)
 from expedientes.purga import barrer, pendientes
 
 from .forms import (
     AreaForm, CargoForm, ConceptoPagoForm, DepartamentoForm, MonedaForm,
-    PreferenciasForm,
+    MotivoContratacionForm, PreferenciasForm,
     SedeForm, TipoDocumentoForm, ZonaForm,
 )
 from .models import Preferencias
@@ -114,6 +120,13 @@ CATALOGOS = {
                      ("Descripción", lambda o: o.descripcion or "—"),
                      ("Orden", lambda o: o.orden)],
     },
+    "motivos-contratacion": {
+        "model": MotivoContratacion, "form": MotivoContratacionForm,
+        "singular": "motivo de contratación", "plural": "Motivos de contratación",
+        "icono": "📅", "activo": "activo",
+        "columnas": [("Nombre", lambda o: o.nombre),
+                     ("Orden", lambda o: o.orden)],
+    },
 }
 
 
@@ -152,6 +165,41 @@ def index(request):
         # enterarse de que alguien está esperando una respuesta.
         "cuantos_pendientes": pendientes().count(),
     })
+
+
+@admin_requerido
+def respaldo_descargar(request):
+    """Descarga una copia de la base de datos: solo los datos, no los archivos.
+
+    Los documentos de los expedientes (media/) no van: se respaldan aparte.
+
+    La copia se hace con la API de respaldo de SQLite sobre la conexión de
+    Django, y no copiando el archivo a lo bruto: si alguien está guardando
+    algo en ese instante, el respaldo sale consistente igual. Además, así
+    funciona igual en las pruebas, cuya base vive en memoria.
+    """
+    connection.ensure_connection()
+    temporal = tempfile.NamedTemporaryFile(
+        prefix="gde-respaldo-", suffix=".sqlite3", delete=False)
+    temporal.close()
+    try:
+        destino = sqlite3.connect(temporal.name)
+        try:
+            connection.connection.backup(destino)
+        finally:
+            destino.close()
+        with open(temporal.name, "rb") as f:
+            datos = f.read()
+    finally:
+        os.unlink(temporal.name)
+
+    marca = timezone.localtime().strftime("%Y%m%d-%H%M%S")
+    registrar(request, RegistroAuditoria.Accion.DESCARGAR, entidad="BaseDeDatos",
+              descripcion="Descargó un respaldo de la base de datos")
+    respuesta = HttpResponse(datos, content_type="application/vnd.sqlite3")
+    respuesta["Content-Disposition"] = (
+        f'attachment; filename="gde-respaldo-{marca}.sqlite3"')
+    return respuesta
 
 
 @admin_requerido

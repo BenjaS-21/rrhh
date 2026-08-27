@@ -13,7 +13,7 @@ from cuentas.widgets import FechaInput, SelectCargo
 from .permisos import trabajadores_visibles, ve_todo_el_pais
 from .models import (
     AsignacionPago, ConceptoPago, DatosContratacion, Documento, Hijo, Moneda,
-    TipoDocumento, Trabajador,
+    MotivoContratacion, TipoDocumento, Trabajador,
 )
 
 
@@ -414,8 +414,6 @@ class DatosContratacionForm(forms.ModelForm):
                 attrs={"placeholder": "Calle, edificio, piso, urbanización, ciudad, estado"}),
             "ciudad_nacimiento": forms.TextInput(
                 attrs={"placeholder": "Ej: CARACAS, DISTRITO CAPITAL"}),
-            "motivo_contratacion": forms.TextInput(
-                attrs={"placeholder": "Ej: Temporada Navidad"}),
             "banco": forms.TextInput(attrs={"placeholder": "Ej: Banco de Venezuela"}),
             "prefijo": forms.TextInput(attrs={"placeholder": "0102", "inputmode": "numeric"}),
             "numero_cuenta": forms.TextInput(attrs={"inputmode": "numeric"}),
@@ -426,6 +424,17 @@ class DatosContratacionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # El motivo se elige del catálogo (Configuración → Motivos de
+        # contratación). El valor que ya tenga el expediente se ofrece igual
+        # aunque no esté: los viejos se cargaron a mano y guardar el
+        # formulario no puede borrarlo sin que nadie lo pida.
+        motivos = [m.nombre for m in MotivoContratacion.objects.filter(activo=True)]
+        actual = (getattr(self.instance, "motivo_contratacion", "") or "").strip()
+        opciones = [(m, m) for m in motivos]
+        if actual and actual not in motivos:
+            opciones.append((actual, actual))
+        self.fields["motivo_contratacion"].widget = forms.Select(
+            choices=[("", "—")] + opciones)
         for campo in self.fields.values():
             css = _SELECT if isinstance(campo.widget, forms.Select) else _INPUT
             campo.widget.attrs.setdefault("class", css)
@@ -568,6 +577,25 @@ class FiltroTrabajadorForm(forms.Form):
     docs = forms.ChoiceField(
         required=False, label="Cantidad de documentos",
         widget=forms.Select(attrs={"class": _SELECT}),
+    )
+    # Rango por fecha de creación del expediente y por fecha de ingreso.
+    # Los cuatro son opcionales: se puede filtrar solo "ingresos desde X" o
+    # acotar entre dos fechas.
+    creado_desde = forms.DateField(
+        required=False, label="Creación desde",
+        widget=FechaInput(attrs={"class": _INPUT}),
+    )
+    creado_hasta = forms.DateField(
+        required=False, label="Creación hasta",
+        widget=FechaInput(attrs={"class": _INPUT}),
+    )
+    ingreso_desde = forms.DateField(
+        required=False, label="Ingreso desde",
+        widget=FechaInput(attrs={"class": _INPUT}),
+    )
+    ingreso_hasta = forms.DateField(
+        required=False, label="Ingreso hasta",
+        widget=FechaInput(attrs={"class": _INPUT}),
     )
 
     def __init__(self, *args, usuario=None, **kwargs):

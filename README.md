@@ -34,6 +34,11 @@ expediente de otra zona.
   la clave; nunca se sirven directo, siempre pasan por una vista que valida permisos.
 - **Borrado lógico** (papelera) en lugar de borrado real.
 - **Versionado** de documentos por tipo.
+- **Compresión al subir**: si el archivo pasa de 20 MB, la misma pantalla
+  ofrece comprimirlo para que suba más rápido —las imágenes se achican en el
+  navegador y los PDF en el servidor (PyMuPDF)—. Es una oferta, no un peaje:
+  **nada se rechaza por tamaño** (solo un techo de seguridad de 80 MB por
+  petición); quien no quiera comprimir sube el archivo tal cual.
 - **Alertas de vencimiento** (carnet de salud, certificados) en el panel.
 - **Checklist de completitud** del expediente según tipos obligatorios.
 - **Remuneración por expediente** en varias monedas (ver abajo).

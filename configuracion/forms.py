@@ -3,7 +3,7 @@
 from django import forms
 
 from cuentas.models import Area, Cargo, Departamento, Sede, Zona
-from expedientes.models import ConceptoPago, Moneda, TipoDocumento
+from expedientes.models import ConceptoPago, Moneda, MotivoContratacion, TipoDocumento
 
 from .models import Preferencias
 
@@ -119,6 +119,12 @@ class ConceptoPagoForm(_BaseForm):
         super().__init__(*args, **kwargs)
         self.fields["moneda"].queryset = Moneda.objects.filter(activa=True)
         self.fields["moneda"].empty_label = None
+
+
+class MotivoContratacionForm(_BaseForm):
+    class Meta:
+        model = MotivoContratacion
+        fields = ["nombre", "activo", "orden"]
 
 
 class PreferenciasForm(_BaseForm):

@@ -18,7 +18,7 @@
   <form class="grid-2" method="get"
         hx-get="{% url 'expedientes:trabajador_list' %}"
         hx-target="#tabla-trabajadores"
-        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_estado, change from:#id_docs"
+        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_estado, change from:#id_docs, change from:#filtro-fechas"
         hx-push-url="true"
         hx-indicator="#cargando">
     <div class="campo mb0">{{ form.q }}</div>
@@ -26,6 +26,31 @@
       {% include "expedientes/_filtro_tiendas.html" %}
       {{ form.estado }}
       {{ form.docs }}
+    </div>
+    <div class="flex wrap pequeno" id="filtro-fechas" style="grid-column:1 / -1; gap:.8rem; align-items:flex-end">
+      <span class="mut">Creación:</span>
+      <div class="campo mb0">
+        <label for="{{ form.creado_desde.id_for_label }}">Desde</label>
+        {{ form.creado_desde }}
+      </div>
+      <div class="campo mb0">
+        <label for="{{ form.creado_hasta.id_for_label }}">Hasta</label>
+        {{ form.creado_hasta }}
+      </div>
+      <span class="mut">Ingreso:</span>
+      <div class="campo mb0">
+        <label for="{{ form.ingreso_desde.id_for_label }}">Desde</label>
+        {{ form.ingreso_desde }}
+      </div>
+      <div class="campo mb0">
+        <label for="{{ form.ingreso_hasta.id_for_label }}">Hasta</label>
+        {{ form.ingreso_hasta }}
+      </div>
+      {% if filtros_activos %}
+        {# Vuelve al listado pelado: sin búsqueda, tiendas, estado, docs ni fechas. #}
+        <a class="btn ghost chico" style="margin-left:auto"
+           href="{% url 'expedientes:trabajador_list' %}">Limpiar filtros</a>
+      {% endif %}
     </div>
   </form>
   <span id="cargando" class="htmx-indicator pequeno mut">Buscando…</span>

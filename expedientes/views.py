@@ -106,12 +106,29 @@ def trabajador_list(request):
             qs = qs.filter(estado=estado)
         if docs not in (None, ""):
             qs = qs.filter(cant_docs=int(docs))
+        # `creado_en` es fecha-hora: se compara por día para que «hasta»
+        # incluya todo el día elegido.
+        creado_desde = form.cleaned_data.get("creado_desde")
+        creado_hasta = form.cleaned_data.get("creado_hasta")
+        ingreso_desde = form.cleaned_data.get("ingreso_desde")
+        ingreso_hasta = form.cleaned_data.get("ingreso_hasta")
+        if creado_desde:
+            qs = qs.filter(creado_en__date__gte=creado_desde)
+        if creado_hasta:
+            qs = qs.filter(creado_en__date__lte=creado_hasta)
+        if ingreso_desde:
+            qs = qs.filter(fecha_ingreso__gte=ingreso_desde)
+        if ingreso_hasta:
+            qs = qs.filter(fecha_ingreso__lte=ingreso_hasta)
 
     paginador = Paginator(qs, 15)
     pagina = paginador.get_page(request.GET.get("page"))
 
     contexto = {"form": form, "pagina": pagina,
-                "querystring": _querystring_sin_pagina(request)}
+                "querystring": _querystring_sin_pagina(request),
+                # El «Limpiar filtros» solo se ofrece cuando hay algo que
+                # limpiar (sin contar la paginación).
+                "filtros_activos": any(k != "page" for k in request.GET)}
     # Respuesta parcial para HTMX (búsqueda en vivo).
     if request.headers.get("HX-Request"):
         return render(request, "expedientes/_tabla_trabajadores.html", contexto)
