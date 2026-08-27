@@ -386,6 +386,14 @@ PLANTILLAS = {
         "origen": "CONTRATO CORPORATIVO.docx",
         "archivo": "contrato_corporativo.docx",
     },
+    # El único que no es Word: vino en PDF y se rellena escribiendo encima
+    # (ver formulario_pdf.py). Sale para IMPRIMIR: las 29 casillas quedan
+    # vacías porque se tildan a mano mientras se arma la carpeta.
+    "checklist": {
+        "titulo": "Lista de verificación del expediente",
+        "origen": "CHECK VERIFICACION EXPEDENTES ACTUALIZADA 20072026.pdf",
+        "archivo": "lista_verificacion_expediente.pdf",
+    },
 }
 
 
@@ -406,6 +414,9 @@ def generar(clave, trabajador):
     valores = contexto_documentos(trabajador)
     if ruta.suffix.lower() == ".rtf":
         datos, faltantes = rellenar_rtf(ruta, valores)
+    elif ruta.suffix.lower() == ".pdf":
+        from .formulario_pdf import rellenar_pdf
+        datos, faltantes = rellenar_pdf(ruta, valores)
     else:
         datos, faltantes = rellenar_docx(ruta, valores)
 
@@ -470,6 +481,8 @@ def contexto_documentos(trabajador) -> dict:
         "Cedula": trabajador.cedula_completa,
         "Columna1": trabajador.cedula_completa,
         "Cargo": trabajador.cargo_nombre,
+        "Dependencia": (trabajador.departamento.nombre
+                        if trabajador.departamento_id else ""),
         # Tienda
         "Tienda": sede.nombre if sede else "",
         "Direccion_de_tienda": (sede.direccion if sede else "") or "",
@@ -499,6 +512,11 @@ def contexto_documentos(trabajador) -> dict:
     valores.update(_partes_fecha(trabajador.fecha_nacimiento, "nacimiento"))
     valores.update(_partes_fecha(trabajador.fecha_ingreso, "ingreso"))
     valores.update(_partes_fecha(datos.fecha_culminacion if datos else None, "culminacion"))
+    # El recuadro de Gestión Humana de la lista de verificación pide la fecha
+    # en número y los montos en cifras; los Word los quieren en letras.
+    valores["Fecha_de_ingreso"] = (trabajador.fecha_ingreso.strftime("%d/%m/%Y")
+                                   if trabajador.fecha_ingreso else "")
+    valores.update(_remuneracion(trabajador))
     return valores
 
 
@@ -614,23 +632,76 @@ def monto_en_letras(monto, codigo_moneda="VES") -> str:
     return f"{letras} {nombre} CON {centimos:02d}/100 {fraccion} ({simbolo}{formateado})"
 
 
-def salario_en_letras(trabajador) -> str:
-    """Toma el sueldo de la Remuneración del expediente y lo pasa a letras.
+def _pagos_vigentes(trabajador):
+    return list(trabajador.pagos.filter(activo=True)
+                .select_related("concepto", "moneda"))
+
+
+def _sueldo_vigente(pagos):
+    """El sueldo de hoy, en UNA moneda. Devuelve (total, moneda) o (None, None).
 
     Se suman los conceptos de clase 'Sueldo' que estén vigentes; si hay en
     varias monedas se prioriza la nacional, que es la que usa el contrato.
+
+    Vive acá, aparte, porque el mismo número sale en letras en el contrato y
+    en cifras en la lista de verificación: si cada uno lo eligiera por su
+    cuenta, tarde o temprano el contrato y la carátula del expediente dirían
+    sueldos distintos.
     """
     from .models import ConceptoPago
 
-    sueldos = [
-        p for p in trabajador.pagos.filter(activo=True).select_related("concepto", "moneda")
-        if p.concepto_id and p.concepto.clase == ConceptoPago.Clase.SUELDO
-    ]
+    sueldos = [p for p in pagos
+               if p.concepto_id and p.concepto.clase == ConceptoPago.Clase.SUELDO]
     if not sueldos:
-        return ""
-
+        return None, None
     nacionales = [p for p in sueldos if p.moneda.es_nacional]
     elegidos = nacionales or sueldos
     moneda = elegidos[0].moneda
-    total = sum(p.monto for p in elegidos if p.moneda_id == moneda.pk)
+    return sum(p.monto for p in elegidos if p.moneda_id == moneda.pk), moneda
+
+
+def _en_cifras(monto, moneda) -> str:
+    """1234.5 -> '1.234,50 Bs', como se escribe acá."""
+    entero, decimales = f"{monto:,.2f}".split(".")
+    return f"{entero.replace(',', '.')},{decimales} {moneda.simbolo}".strip()
+
+
+def _por_nombre(pagos, contiene, salvo=()):
+    """El primer pago cuyo concepto mencione `contiene`.
+
+    Se busca por nombre y no por un campo del catálogo porque el bono de
+    alimentación no es una categoría del sistema: es un concepto más que
+    cargó Gestión Humana desde Configuración, con el nombre que quiso.
+    """
+    for pago in pagos:
+        nombre = normalizar_campo(
+            pago.concepto.nombre if pago.concepto_id else pago.nombre_libre)
+        if contiene in nombre and not any(otro in nombre for otro in salvo):
+            return pago
+    return None
+
+
+def _remuneracion(trabajador) -> dict:
+    """Los tres montos del recuadro de Gestión Humana, en cifras.
+
+    Lo que no esté cargado sale vacío y se imprime en blanco, para completarlo
+    a mano: es una lista que se llena mientras se arma la carpeta.
+    """
+    pagos = _pagos_vigentes(trabajador)
+    total, moneda = _sueldo_vigente(pagos)
+    bono = _por_nombre(pagos, "aliment", salvo=("complement",))
+    complemento = _por_nombre(pagos, "complement")
+    return {
+        "Sueldo": _en_cifras(total, moneda) if total is not None else "",
+        "Bono_de_alimentacion": _en_cifras(bono.monto, bono.moneda) if bono else "",
+        "Complemento_alimentacion": (_en_cifras(complemento.monto, complemento.moneda)
+                                     if complemento else ""),
+    }
+
+
+def salario_en_letras(trabajador) -> str:
+    """Toma el sueldo de la Remuneración del expediente y lo pasa a letras."""
+    total, moneda = _sueldo_vigente(_pagos_vigentes(trabajador))
+    if total is None:
+        return ""
     return monto_en_letras(total, moneda.codigo)

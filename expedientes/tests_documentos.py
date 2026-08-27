@@ -42,6 +42,11 @@ PLANTILLAS_LISTAS = all(
 SOLO_DOCX = [clave for clave, meta in generador.PLANTILLAS.items()
              if meta["archivo"].lower().endswith(".docx")]
 
+# Los que hay que convertir para tener un PDF. La lista de verificación no
+# entra: ya nace en PDF, no hay Word que convertir.
+NECESITAN_CONVERSION = [clave for clave, meta in generador.PLANTILLAS.items()
+                        if not meta["archivo"].lower().endswith(".pdf")]
+
 falta_plantillas = unittest.skipUnless(
     PLANTILLAS_LISTAS, "Faltan las plantillas: python manage.py preparar_plantillas"
 )
@@ -57,6 +62,27 @@ def texto_docx(datos: bytes) -> str:
         for p in root.iter(W + "p"):
             salida.append("".join(t.text or "" for t in p.iter(W + "t")))
     return "\n".join(salida)
+
+
+def texto_pdf(datos: bytes) -> str:
+    import pymupdf
+
+    with pymupdf.open(stream=datos, filetype="pdf") as documento:
+        return "\n".join(pagina.get_text() for pagina in documento)
+
+
+def texto_generado(datos: bytes, nombre: str) -> str:
+    """El texto visible de un documento generado, sea .docx, .rtf o .pdf.
+
+    Existe para que las pruebas que recorren TODAS las plantillas no tengan
+    que saber de qué tipo es cada una: un formato nuevo se agrega acá y las
+    demás pruebas lo cubren solas.
+    """
+    if nombre.lower().endswith(".docx"):
+        return texto_docx(datos)
+    if nombre.lower().endswith(".pdf"):
+        return texto_pdf(datos)
+    return datos.decode("latin-1", "replace")
 
 
 class MontoEnLetras(TestCase):
@@ -272,6 +298,9 @@ class GeneracionReal(BaseDocumentos):
             resp = self.client.get(self.url(clave))
             if clave == "recibo":
                 crudo = resp.content.decode("latin-1")
+            elif resp.content.startswith(b"%PDF-"):
+                # Un PDF no es un zip de XML: se revisa el texto que se ve.
+                crudo = texto_pdf(resp.content)
             else:
                 crudo = "".join(
                     zipfile.ZipFile(BytesIO(resp.content)).read(n).decode("utf-8", "replace")

@@ -31,7 +31,7 @@ from cuentas.models import Cargo, Departamento, Sede, Zona
 from expedientes import documentos as generador
 from expedientes.models import (AsignacionPago, ConceptoPago, DatosContratacion,
                                 Moneda, Trabajador)
-from expedientes.tests_documentos import falta_plantillas, texto_docx
+from expedientes.tests_documentos import falta_plantillas, texto_generado
 
 # "5 de enero de 2026"
 FECHA = re.compile(r"(\d{1,2}) de ([a-zA-ZñáéíóúÑÁÉÍÓÚ]+) de (\d{4})")
@@ -78,9 +78,7 @@ class NingunaFechaQuedaEscritaAMano(TestCase):
 
     def _texto(self, clave, trabajador):
         datos, nombre, _ = generador.generar(clave, trabajador)
-        crudo = (texto_docx(datos) if nombre.endswith(".docx")
-                 else datos.decode("latin-1", "replace"))
-        return re.sub(r"\s+", " ", crudo)
+        return re.sub(r"\s+", " ", texto_generado(datos, nombre))
 
     def _fechas(self, clave, trabajador):
         return FECHA.findall(self._texto(clave, trabajador))

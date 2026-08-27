@@ -223,7 +223,13 @@ def documento_generar(request, pk, clave):
 
     titulo = generador.PLANTILLAS[clave]["titulo"]
 
-    if formato == "word":
+    if nombre.lower().endswith(".pdf"):
+        # La lista de verificación ya nace en PDF: no hay Word que convertir.
+        # Se entrega igual en los tres formatos; lo único que cambia es si se
+        # baja o se abre en el navegador para imprimirla y tildarla a mano.
+        tipo = "application/pdf"
+        adjunto = formato != "imprimir"
+    elif formato == "word":
         tipo = ("application/rtf" if nombre.lower().endswith(".rtf") else
                 "application/vnd.openxmlformats-officedocument."
                 "wordprocessingml.document")

@@ -69,7 +69,8 @@ class Command(BaseCommand):
             return exacto
         clave = re.sub(r"[^a-z0-9]", "", nombre.lower())[:14]
         for p in carpeta.iterdir():
-            if p.suffix.lower() not in (".docx", ".rtf"):
+            # El .pdf es la lista de verificación, que no vino en Word.
+            if p.suffix.lower() not in (".docx", ".rtf", ".pdf"):
                 continue
             if re.sub(r"[^a-z0-9]", "", p.name.lower()).startswith(clave):
                 return p

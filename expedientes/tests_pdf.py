@@ -14,7 +14,7 @@ from django.urls import reverse
 
 from expedientes import documentos as generador
 from expedientes import pdf as conversor
-from expedientes.tests_documentos import BaseDocumentos
+from expedientes.tests_documentos import NECESITAN_CONVERSION, BaseDocumentos
 
 PDF_FALSO = b"%PDF-1.7\n% documento de prueba\n"
 
@@ -152,8 +152,8 @@ class BotonesEnLaPantalla(BaseDocumentos):
 class ConversionReal(BaseDocumentos):
     """Conversión de verdad, sin dobles. Solo corre donde hay Word."""
 
-    def test_los_cinco_documentos_se_convierten(self):
-        for clave in generador.PLANTILLAS:
+    def test_los_documentos_word_se_convierten(self):
+        for clave in NECESITAN_CONVERSION:
             with self.subTest(documento=clave):
                 datos, nombre, _ = generador.generar(clave, self.trabajador)
                 salida = conversor.convertir_a_pdf(datos, nombre)

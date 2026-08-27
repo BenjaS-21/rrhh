@@ -27,9 +27,20 @@ Thumbs.db
 # Archivo vacio que quedo suelto.
 /txt
 
-# Los formatos originales de Damasco (contratos, actas, cartas). Este
-# repositorio es PUBLICO: son documentos internos de la empresa y publicarlos
-# es una decision que no toma el codigo. Si se decide incluirlos, se saca esta
-# seccion.
+# Los formatos originales de Damasco (contratos, actas, cartas, la lista de
+# verificacion). Este repositorio es PUBLICO: son documentos internos de la
+# empresa -la lista lo dice en el pie: "USO INTERNO... no puede ser copiada,
+# divulgada o transmitida"- y publicarlos es una decision que no toma el
+# codigo. Si se decide incluirlos, se saca esta seccion.
 /*.docx
 /*.rtf
+/*.pdf
+
+# Planillas de nomina e ingresos que se dejan en la raiz para cargarlas.
+# Traen nombres, cedulas y sueldos de personas reales: en un repositorio
+# publico no entran por ningun motivo.
+/*.xlsx
+/*.xls
+/*.csv
+/*.zip
+/*.rar
