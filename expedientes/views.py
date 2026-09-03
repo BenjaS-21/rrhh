@@ -2,6 +2,7 @@
 
 import mimetypes
 import os
+from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import quote
 
@@ -12,7 +13,9 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.http import content_disposition_header, url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -519,6 +522,19 @@ def _guardar_expediente(request, form, form_contrato, trabajador=None):
 
     # La fecha de ingreso está en la ficha, pero la necesitan los dos.
     fecha_ingreso = form.cleaned_data.get("fecha_ingreso")
+    # Duración o fecha fin SIN ingreso: casi seguro la fecha de
+    # ingreso se tecleó en el campo que no era (pasó: el
+    # ingreso escrito en «fecha fin» y el expediente quedaba
+    # sin ingreso). Se frena acá, donde todavía se puede
+    # corregir sin drama.
+    if not fecha_ingreso and (
+            form_contrato.cleaned_data.get("duracion_dias")
+            or form_contrato.cleaned_data.get("fecha_culminacion")):
+        form.add_error(
+            "fecha_ingreso",
+            "Cargaste duración o fecha de fin: la fecha de ingreso "
+            "hace falta (revisá que no la hayas escrito en fecha de fin).")
+        return None
     if not form_contrato.validar_contra_ingreso(fecha_ingreso):
         return None
 
@@ -985,6 +1001,20 @@ def _nomina_filtrada(request):
             qs = qs.filter(departamento=departamento)
         if estado:
             qs = qs.filter(estado=estado)
+        # Mismos filtros de fecha que el listado de expedientes: `creado_en`
+        # se compara por dia para que « hasta » incluya el dia entero.
+        creado_desde = datos.get("creado_desde")
+        creado_hasta = datos.get("creado_hasta")
+        ingreso_desde = datos.get("ingreso_desde")
+        ingreso_hasta = datos.get("ingreso_hasta")
+        if creado_desde:
+            qs = qs.filter(creado_en__date__gte=creado_desde)
+        if creado_hasta:
+            qs = qs.filter(creado_en__date__lte=creado_hasta)
+        if ingreso_desde:
+            qs = qs.filter(fecha_ingreso__gte=ingreso_desde)
+        if ingreso_hasta:
+            qs = qs.filter(fecha_ingreso__lte=ingreso_hasta)
     return form, qs
 
 
@@ -1143,6 +1173,11 @@ def nomina_export(request):
         ("Departamento", lambda t: t.departamento.nombre if t.departamento else "", None),
         ("Tienda", lambda t: t.sede.nombre if t.sede else "", None),
         ("Fecha de ingreso", lambda t: t.fecha_ingreso, FECHA),
+        ("Estatus", lambda t: t.get_estado_display(), None),
+        # La observacion de la baja solo se muestra si no esta activo:
+        # es el motivo, y solo tiene sentido cuando hay baja.
+        ("Observación",
+         lambda t: t.observaciones_baja if t.estado != "ACTIVO" else "", None),
     ]
 
     if incluir_pagos:
@@ -1247,3 +1282,141 @@ def auditoria_list(request):
         "accion_sel": accion or "",
         "q": q or "",
     })
+
+
+@login_required
+def renovaciones(request):
+    """Contratos por vencer o ya vencidos, para gestionar la renovación.
+
+    Lo ven los roles que editan (Administrador, RRHH Interior y RRHH
+    Principal); solo lectura no entra. La restricción por zona aplica igual
+    que en el listado de expedientes.
+
+    Los rangos de días incluyen a los ya vencidos: son los que más urgencia
+    tienen y escondidos no renueva nadie.
+    """
+    if not request.user.puede_editar:
+        messages.error(request, "Tu rol es de solo lectura.")
+        return redirect("expedientes:panel")
+
+    hoy = timezone.localdate()
+    rango = request.GET.get("rango") or "90"
+    qs = (trabajadores_visibles(request.user)
+          .filter(estado=Trabajador.Estado.ACTIVO)
+          .select_related("contratacion", "sede", "sede__zona", "puesto"))
+
+    if rango == "sin-fecha":
+        qs = qs.filter(Q(contratacion__isnull=True)
+                       | Q(contratacion__fecha_culminacion__isnull=True))
+        qs = qs.order_by("apellidos", "nombres")
+    else:
+        qs = qs.filter(contratacion__fecha_culminacion__isnull=False)
+        if rango == "vencidos":
+            qs = qs.filter(contratacion__fecha_culminacion__lt=hoy)
+        elif rango != "todos":
+            try:
+                dias = int(rango)
+            except ValueError:
+                rango = "90"
+                dias = 90
+            qs = qs.filter(
+                contratacion__fecha_culminacion__lte=hoy + timedelta(days=dias))
+        qs = qs.order_by("contratacion__fecha_culminacion", "apellidos", "nombres")
+
+    filas = list(qs)
+    for t in filas:
+        datos = getattr(t, "contratacion", None)
+        t.fin = datos.fecha_culminacion if datos else None
+        t.dias_restantes = (t.fin - hoy).days if t.fin else None
+        t.dias_vencido = (-t.dias_restantes
+                          if t.dias_restantes is not None and t.dias_restantes < 0
+                          else None)
+
+    return render(request, "expedientes/renovaciones.html", {
+        "filas": filas, "rango": rango,
+    })
+
+
+@login_required
+@require_POST
+def renovacion_guardar(request, pk):
+    """Cambia la fecha de fin de contrato desde la lista de renovaciones.
+
+    Con la fecha nueva la duración se deduce sola de la fecha de ingreso.
+    Vaciar el campo deja el contrato sin fecha (queda en el grupo «sin
+    fecha cargada»).
+    """
+    trabajador = get_object_or_404(
+        Trabajador.objects.select_related("sede", "contratacion"), pk=pk)
+    exigir_editar_trabajador(request.user, trabajador)
+
+    datos, _ = DatosContratacion.objects.get_or_create(trabajador=trabajador)
+    antes = datos.fecha_culminacion
+    texto = (request.POST.get("fecha_culminacion") or "").strip()
+    nueva = parse_date(texto) if texto else None
+    rango = request.POST.get("rango") or "90"
+    destino = f"{reverse('expedientes:renovaciones')}?rango={rango}"
+    if texto and nueva is None:
+        messages.error(request, f"Fecha inválida para {trabajador}: '{texto}'.")
+        return redirect(destino)
+
+    datos.fecha_culminacion = nueva
+    campos = ["fecha_culminacion", "actualizado_en", "actualizado_por"]
+    if nueva and trabajador.fecha_ingreso:
+        datos.duracion_dias = max((nueva - trabajador.fecha_ingreso).days + 1, 1)
+        campos.append("duracion_dias")
+    datos.actualizado_por = request.user
+    datos.save(update_fields=campos)
+
+    registrar(request, RegistroAuditoria.Accion.EDITAR, entidad="Trabajador",
+              objeto_id=trabajador.pk,
+              descripcion=f"Cambió fin de contrato de {trabajador}: "
+                          f"{antes or '—'} → {nueva or '—'}")
+    messages.success(
+        request, f"Fin de contrato de {trabajador.nombre_completo} actualizado.")
+    return redirect(destino)
+
+
+# Los contratos de la casa duran 90 días: la renovación de un clic encadena
+# otro período igual. Si se quiere otra fecha cualquiera, está el campo manual.
+DIAS_RENOVACION = 90
+
+
+@login_required
+@require_POST
+def renovacion_renovar(request, pk):
+    """Renueva el contrato con un clic: fin = fin actual (o hoy) + 90 días.
+
+    Nunca crea ni duplica nada: toca la fecha de fin del MISMO expediente.
+    Si el contrato sigue vigente, el nuevo tramo se encadena al fin actual
+    (no se regalan ni se comen días); si ya venció o no tenía fecha, arranca
+    de hoy.
+    """
+    trabajador = get_object_or_404(
+        Trabajador.objects.select_related("sede", "contratacion"), pk=pk)
+    exigir_editar_trabajador(request.user, trabajador)
+
+    datos, _ = DatosContratacion.objects.get_or_create(trabajador=trabajador)
+    hoy = timezone.localdate()
+    antes = datos.fecha_culminacion
+    base = antes if antes and antes > hoy else hoy
+    nueva = base + timedelta(days=DIAS_RENOVACION)
+
+    datos.fecha_culminacion = nueva
+    campos = ["fecha_culminacion", "actualizado_en", "actualizado_por"]
+    if trabajador.fecha_ingreso:
+        datos.duracion_dias = max((nueva - trabajador.fecha_ingreso).days + 1, 1)
+        campos.append("duracion_dias")
+    datos.actualizado_por = request.user
+    datos.save(update_fields=campos)
+
+    registrar(request, RegistroAuditoria.Accion.EDITAR, entidad="Trabajador",
+              objeto_id=trabajador.pk,
+              descripcion=f"Renovó el contrato de {trabajador} por "
+                          f"{DIAS_RENOVACION} días: {antes or '—'} → {nueva}")
+    messages.success(
+        request,
+        f"Contrato de {trabajador.nombre_completo} renovado hasta el "
+        f"{nueva:%d/%m/%Y}.")
+    rango = request.POST.get("rango") or "90"
+    return redirect(f"{reverse('expedientes:renovaciones')}?rango={rango}")

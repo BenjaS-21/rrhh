@@ -17,7 +17,7 @@
   <form class="grid-2" method="get" id="filtros-nomina"
         hx-get="{% url 'expedientes:nomina' %}"
         hx-target="#tabla-nomina"
-        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_departamento, change from:#id_estado"
+        hx-trigger="submit, keyup changed delay:400ms from:#id_q, change from:#filtro-tiendas, change from:#id_departamento, change from:#id_estado, change from:#filtro-fechas-nomina"
         hx-push-url="true"
         hx-indicator="#cargando">
     <div class="campo mb0">{{ form.q }}</div>
@@ -25,6 +25,26 @@
       {% include "expedientes/_filtro_tiendas.html" %}
       {{ form.departamento }}
       {{ form.estado }}
+    </div>
+    <div class="flex wrap pequeno" id="filtro-fechas-nomina" style="grid-column:1 / -1; gap:.8rem; align-items:flex-end">
+      <span class="mut">Creación:</span>
+      <div class="campo mb0">
+        <label for="{{ form.creado_desde.id_for_label }}">Desde</label>
+        {{ form.creado_desde }}
+      </div>
+      <div class="campo mb0">
+        <label for="{{ form.creado_hasta.id_for_label }}">Hasta</label>
+        {{ form.creado_hasta }}
+      </div>
+      <span class="mut">Ingreso:</span>
+      <div class="campo mb0">
+        <label for="{{ form.ingreso_desde.id_for_label }}">Desde</label>
+        {{ form.ingreso_desde }}
+      </div>
+      <div class="campo mb0">
+        <label for="{{ form.ingreso_hasta.id_for_label }}">Hasta</label>
+        {{ form.ingreso_hasta }}
+      </div>
     </div>
   </form>
   <span id="cargando" class="htmx-indicator pequeno mut">Buscando…</span>

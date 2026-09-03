@@ -40,6 +40,9 @@
       <a href="{% url 'expedientes:panel' %}">Panel</a>
       <a href="{% url 'expedientes:trabajador_list' %}">Expedientes</a>
       <a href="{% url 'expedientes:nomina' %}">Nómina</a>
+      {% if user.puede_editar %}
+        <a href="{% url 'expedientes:renovaciones' %}">Renovaciones</a>
+      {% endif %}
       {% if user.es_admin %}
         <a href="{% url 'cuentas:invitaciones' %}">Invitaciones</a>
         <a href="{% url 'configuracion:index' %}">Configuración</a>

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titulo %}Duplicados — Configuración — {{ sistema }}{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'configuracion:index' %}" class="pequeno">← Volver a configuración</a>
+    <h1>Validar duplicados</h1>
+    <div class="subtitulo">
+      Expedientes que podrían ser la misma persona dos veces. Acá no se borra nada:
+      la decisión se toma en cada expediente.
+    </div>
+  </div>
+</div>
+
+{% if grupos %}
+  {% for g in grupos %}
+  <div class="card">
+    <h2>{{ g.criterio }} <span class="badge rojo">{{ g.miembros|length }}</span></h2>
+    <div class="tabla-scroll">
+      <table class="datos">
+        <thead>
+          <tr>
+            <th>Cédula</th><th>Nombre</th><th>Nacimiento</th><th>Tienda</th>
+            <th>Cargo</th><th>Ingreso</th><th>Estado</th><th>Docs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in g.miembros %}
+          <tr>
+            <td><a href="{% url 'expedientes:trabajador_detail' t.pk %}"><strong>{{ t.cedula_completa }}</strong></a></td>
+            <td>{{ t.apellidos }}, {{ t.nombres }}</td>
+            <td class="mut">{{ t.fecha_nacimiento|date:"d/m/Y"|default:"—" }}</td>
+            <td class="pequeno">{{ t.sede.nombre }}</td>
+            <td class="pequeno">{{ t.puesto|default:"—" }}</td>
+            <td class="mut pequeno">{{ t.fecha_ingreso|date:"d/m/Y"|default:"—" }}</td>
+            <td>{% if t.estado == "ACTIVO" %}<span class="badge verde">Activo</span>{% else %}<span class="badge gris">Baja</span>{% endif %}</td>
+            <td>{{ t.cant_docs }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="card">
+    <div class="vacio">No se encontraron duplicados. Los expedientes están limpios.</div>
+  </div>
+{% endif %}
+{% endblock %}

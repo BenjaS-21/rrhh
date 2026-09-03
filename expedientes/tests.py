@@ -453,7 +453,7 @@ class AltaUnificada(BasePagos):
         self.assertEqual(t.puesto, self.cargo_cajera)
         self.assertEqual(t.contratacion.estado_civil, "SOLTERO(A)")
         self.assertEqual(t.contratacion.ciudad_nacimiento, "MARACAY, ARAGUA")
-        self.assertEqual(t.contratacion.banco, "Banco de Venezuela")
+        self.assertEqual(t.contratacion.banco, "BANCO DE VENEZUELA")
 
     def test_la_duracion_calcula_la_fecha_de_fin(self):
         self.client.post(reverse("expedientes:trabajador_create"), self.datos_alta())

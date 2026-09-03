@@ -210,7 +210,7 @@ class DondeSeMuestra(_Base):
     def test_buscar_por_el_numero_lo_encuentra(self):
         """Testigo: la gente busca por el número, con letra o sin ella."""
         r = self.client.get(reverse("expedientes:trabajador_list") + "?q=30719983")
-        self.assertIn("Velazco", r.content.decode())
+        self.assertIn("VELAZCO", r.content.decode())
 
 
 class SinConsultasDeMas(_Base):

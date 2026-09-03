@@ -228,6 +228,11 @@ class Usuario(AbstractUser):
         help_text="Área/departamento del usuario. Informativo (no afecta permisos).",
     )
     telefono = models.CharField(max_length=40, blank=True)
+    cedula = models.CharField(
+        "cédula", max_length=30, blank=True,
+        help_text="Opcional. Sirve para encontrar al usuario por la cédula "
+                  "de la persona en Configuración → Usuarios.",
+    )
 
     class Meta:
         verbose_name = "usuario"
@@ -380,6 +385,74 @@ class InvitacionRegistro(models.Model):
 
     def get_ruta(self) -> str:
         return reverse("cuentas:registro", args=[self.token])
+
+    def get_link_absoluto(self) -> str:
+        base = getattr(settings, "SITE_URL", "").rstrip("/")
+        return f"{base}{self.get_ruta()}"
+
+
+def _expiracion_recuperacion():
+    return timezone.now() + timedelta(hours=48)
+
+
+class RecuperacionClave(models.Model):
+    """Link tokenizado para que un usuario recupere su clave sin entrar.
+
+    Lo genera el Administrador desde Configuración → Usuarios y se lo manda a
+    la persona por el medio que sea (correo, WhatsApp). Es de un solo uso y
+    vence a las 48 horas: un link de recuperación que queda abierto para
+    siempre es una puerta sin llave. Al usarse, los demás links activos del
+    mismo usuario se anulan.
+    """
+
+    token = models.CharField(
+        max_length=64, unique=True, default=_generar_token, editable=False,
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="recuperaciones",
+    )
+    creada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="recuperaciones_creadas",
+    )
+    creada_en = models.DateTimeField(auto_now_add=True)
+    expira_en = models.DateTimeField(default=_expiracion_recuperacion)
+    activa = models.BooleanField(default=True)
+    usada_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "link de recuperación de clave"
+        verbose_name_plural = "links de recuperación de clave"
+        ordering = ["-creada_en"]
+
+    def __str__(self):
+        return f"Recuperación de {self.usuario} ({self.estado})"
+
+    @property
+    def esta_expirada(self) -> bool:
+        return timezone.now() > self.expira_en
+
+    @property
+    def esta_usada(self) -> bool:
+        return self.usada_en is not None
+
+    @property
+    def esta_vigente(self) -> bool:
+        return self.activa and not self.esta_usada and not self.esta_expirada
+
+    @property
+    def estado(self) -> str:
+        if self.esta_usada:
+            return "Usado"
+        if not self.activa:
+            return "Anulado"
+        if self.esta_expirada:
+            return "Expirado"
+        return "Vigente"
+
+    def get_ruta(self) -> str:
+        return reverse("cuentas:recuperar", args=[self.token])
 
     def get_link_absoluto(self) -> str:
         base = getattr(settings, "SITE_URL", "").rstrip("/")

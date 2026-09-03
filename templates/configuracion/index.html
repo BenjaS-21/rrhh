@@ -57,5 +57,19 @@ que ya estaba cargado había que adivinar que el nombre era un enlace.
     <div class="catalogo__dato">Solo los datos (el SQL). Los archivos de los expedientes se respaldan aparte.</div>
     <a class="btn sec chico" href="{% url 'configuracion:respaldo' %}">Descargar respaldo</a>
   </div>
+
+  <div class="catalogo">
+    <div class="catalogo__icono">👤</div>
+    <a class="catalogo__nombre" href="{% url 'configuracion:usuarios' %}">Usuarios</a>
+    <div class="catalogo__dato">Cambiar claves y generar links de recuperación.</div>
+    <a class="btn sec chico" href="{% url 'configuracion:usuarios' %}">Ver listado</a>
+  </div>
+
+  <div class="catalogo">
+    <div class="catalogo__icono">🔍</div>
+    <a class="catalogo__nombre" href="{% url 'configuracion:duplicados' %}">Validar duplicados</a>
+    <div class="catalogo__dato">Expedientes que podrían ser la misma persona dos veces.</div>
+    <a class="btn sec chico" href="{% url 'configuracion:duplicados' %}">Revisar</a>
+  </div>
 </div>
 {% endblock %}

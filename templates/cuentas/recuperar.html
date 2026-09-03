@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titulo %}Recuperar clave — {{ sistema }}{% endblock %}
+{% block contenedor_clase %}login-wrap{% endblock %}
+
+{% block contenido %}
+<aside class="login-marca">
+  <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
+  <h2>Recuperación de clave</h2>
+  <p>El administrador te habilitó este link para elegir una contraseña nueva.</p>
+</aside>
+
+<section class="login-form-side">
+  <div class="login-card">
+    <h1>Clave nueva</h1>
+    <p class="mut pequeno">Para la cuenta <strong>{{ recuperacion.usuario.username }}</strong>.
+      El link deja de servir cuando la guardás.</p>
+
+    {% for m in messages %}<div class="flash {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+    <form method="post">
+      {% csrf_token %}
+      {% for campo in form %}
+        <div class="campo">
+          <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          {{ campo }}
+          {% if campo.help_text %}<div class="ayuda">{{ campo.help_text|safe }}</div>{% endif %}
+          {% if campo.errors %}<div class="errores">{{ campo.errors|striptags }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors }}</div>{% endif %}
+      <button class="btn grande" style="width:100%; justify-content:center" type="submit">Guardar clave nueva</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

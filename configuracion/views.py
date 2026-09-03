@@ -10,18 +10,21 @@ import tempfile
 from functools import wraps
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import SetPasswordForm
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from cuentas.models import Area, Cargo, Departamento, Sede, Zona
+from cuentas.models import Area, Cargo, Departamento, RecuperacionClave, Sede, Zona
 from expedientes.auditoria import registrar
 from expedientes.models import (
     ConceptoPago, Moneda, MotivoContratacion, RegistroAuditoria, TipoDocumento,
+    Trabajador,
 )
 from expedientes.purga import barrer, pendientes
 
@@ -31,6 +34,8 @@ from .forms import (
     SedeForm, TipoDocumentoForm, ZonaForm,
 )
 from .models import Preferencias
+
+Usuario = get_user_model()
 
 
 def _si_no(v):
@@ -165,6 +170,139 @@ def index(request):
         # enterarse de que alguien está esperando una respuesta.
         "cuantos_pendientes": pendientes().count(),
     })
+
+
+@admin_requerido
+def usuarios(request):
+    """Listado de usuarios con búsqueda, cambio de clave y links de recuperación.
+
+    El buscador cubre usuario, nombre, apellido, correo y cédula: cuando alguien
+    llama diciendo «no puedo entrar», lo único que se tiene a mano es cualquiera
+    de esos datos.
+    """
+    q = (request.GET.get("q") or "").strip()
+    lista = Usuario.objects.all().order_by("username")
+    if q:
+        lista = lista.filter(
+            Q(username__icontains=q)
+            | Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+            | Q(email__icontains=q)
+            | Q(cedula__icontains=q)
+        )
+    return render(request, "configuracion/usuarios.html", {"q": q, "usuarios": lista})
+
+
+@admin_requerido
+@require_POST
+def usuario_cambiar_clave(request, pk):
+    """El Administrador le fija una clave nueva a un usuario, al momento."""
+    usuario = get_object_or_404(Usuario, pk=pk)
+    form = SetPasswordForm(usuario, request.POST)
+    if form.is_valid():
+        form.save()
+        registrar(request, RegistroAuditoria.Accion.EDITAR, entidad="Usuario",
+                  objeto_id=usuario.pk,
+                  descripcion=f"Cambió la clave de '{usuario.username}'")
+        messages.success(request, f"Clave de {usuario.username} actualizada.")
+    else:
+        primer_error = next(iter(form.errors.values()))[0]
+        messages.error(
+            request, f"No se cambió la clave de {usuario.username}: {primer_error}")
+    return redirect("configuracion:usuarios")
+
+
+@admin_requerido
+@require_POST
+def usuario_recuperacion(request, pk):
+    """Genera el link de 48 horas para que la persona recupere su clave sola.
+
+    Un solo link vigente por usuario: generar uno nuevo anula el anterior, así
+    no quedan varias puertas abiertas a la misma cuenta.
+    """
+    usuario = get_object_or_404(Usuario, pk=pk)
+    if not usuario.is_active:
+        messages.error(
+            request, f"{usuario.username} está desactivado: no se le puede dar un link.")
+        return redirect("configuracion:usuarios")
+    RecuperacionClave.objects.filter(usuario=usuario, activa=True).update(activa=False)
+    rec = RecuperacionClave.objects.create(usuario=usuario, creada_por=request.user)
+    registrar(request, RegistroAuditoria.Accion.CREAR,
+              entidad="Recuperación de clave", objeto_id=rec.pk,
+              descripcion=f"Generó link de recuperación para '{usuario.username}'")
+    messages.success(
+        request,
+        f"Link de recuperación para {usuario.username} (vale 48 h): "
+        f"{rec.get_link_absoluto()}")
+    return redirect("configuracion:usuarios")
+
+
+@admin_requerido
+def duplicados(request):
+    """Expedientes que podrían ser la misma persona cargada dos veces.
+
+    Con las cargas masivas de varios archivos pasó: misma persona con la
+    cédula escrita distinto («V-123» y «123»), o dos veces en archivos
+    distintos con datos levemente diferentes. La cédula es única en la base,
+    así que el duplicado siempre entra disfrazado de otra cosa.
+
+    No se borra ni se fusiona nada acá: se muestran los grupos sospechosos,
+    del más evidente al menos, y la decisión la toma una persona en cada
+    expediente (dar de baja al que sobre).
+    """
+    import re
+    import unicodedata
+    from collections import defaultdict
+
+    def norm(t):
+        t = unicodedata.normalize("NFD", t or "")
+        t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+        return re.sub(r"\s+", " ", t).strip().upper()
+
+    trabajadores = list(
+        Trabajador.objects.select_related("sede", "puesto", "tipo_documento")
+        .annotate(cant_docs=Count("documentos", filter=Q(documentos__activo=True)))
+        .order_by("apellidos", "nombres"))
+
+    def nombre_de(t):
+        return norm(f"{t.apellidos} {t.nombres}")
+
+    criterios = [
+        ("Misma cédula escrita de dos formas",
+         lambda t: re.sub(r"\D", "", t.documento_identidad) or None),
+        ("Mismo RIF",
+         lambda t: re.sub(r"[^0-9A-Za-z]", "", t.rif).upper() or None),
+    ]
+    grupos = []
+    for titulo, clave_de in criterios:
+        por_clave = defaultdict(list)
+        for t in trabajadores:
+            clave = clave_de(t)
+            if clave:
+                por_clave[clave].append(t)
+        for miembros in por_clave.values():
+            if len(miembros) > 1:
+                grupos.append({"criterio": titulo, "miembros": miembros})
+
+    # Mismo nombre: si además coincide la fecha de nacimiento es duplicado
+    # casi seguro; si no, puede ser homónimo y se marca para mirar con calma.
+    por_nombre = defaultdict(list)
+    for t in trabajadores:
+        clave = nombre_de(t)
+        if clave:
+            por_nombre[clave].append(t)
+    for miembros in por_nombre.values():
+        if len(miembros) < 2:
+            continue
+        fechas = {t.fecha_nacimiento for t in miembros}
+        if len(fechas) == 1 and None not in fechas:
+            grupos.append({"criterio": "Mismo nombre y misma fecha de nacimiento",
+                           "miembros": miembros})
+        else:
+            grupos.append({"criterio": "Mismo nombre (posible homónimo: revisar)",
+                           "miembros": miembros})
+
+    return render(request, "configuracion/duplicados.html", {"grupos": grupos})
 
 
 @admin_requerido

@@ -10,4 +10,5 @@ urlpatterns = [
     path("invitaciones/", views.invitaciones, name="invitaciones"),
     path("invitaciones/<int:pk>/anular/", views.invitacion_anular, name="invitacion_anular"),
     path("registro/<str:token>/", views.registro, name="registro"),
+    path("recuperar/<str:token>/", views.recuperar_clave, name="recuperar"),
 ]

@@ -44,3 +44,6 @@ Thumbs.db
 /*.csv
 /*.zip
 /*.rar
+# Restos de descargas a medias de esos mismos archivos.
+/*.download
+/*.digest

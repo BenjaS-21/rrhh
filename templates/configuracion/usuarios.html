@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}Usuarios — Configuración — {{ sistema }}{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <a href="{% url 'configuracion:index' %}" class="pequeno">← Volver a configuración</a>
+    <h1>Usuarios</h1>
+    <div class="subtitulo">Buscá una cuenta para cambiarle la clave o mandarle un link de recuperación.</div>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" class="flex" style="gap:.6rem">
+    <input class="input" type="search" name="q" value="{{ q }}"
+           placeholder="Correo, usuario, nombre, apellido o cédula…" style="max-width:420px">
+    <button class="btn" type="submit">Buscar</button>
+    {% if q %}<a class="btn ghost" href="{% url 'configuracion:usuarios' %}">Limpiar</a>{% endif %}
+  </form>
+</div>
+
+<div class="card">
+  {% if usuarios %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead>
+        <tr>
+          <th>Usuario</th><th>Nombre</th><th>Cédula</th><th>Correo</th>
+          <th>Rol</th><th>Alcance</th><th>Activo</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td><strong>{{ u.username }}</strong></td>
+          <td>{{ u.get_full_name|default:"—" }}</td>
+          <td class="mut">{{ u.cedula|default:"—" }}</td>
+          <td class="mut pequeno">{{ u.email|default:"—" }}</td>
+          <td>{{ u.get_rol_display }}</td>
+          <td class="pequeno">{{ u.descripcion_alcance }}</td>
+          <td>{% if u.is_active %}<span class="badge verde">Sí</span>{% else %}<span class="badge rojo">No</span>{% endif %}</td>
+          <td style="min-width:230px">
+            <details class="baja-form" style="max-width:none">
+              <summary class="btn sec chico">Cambiar clave</summary>
+              <form method="post" action="{% url 'configuracion:usuario_clave' u.pk %}"
+                    style="margin-top:.5rem">
+                {% csrf_token %}
+                <div class="campo mb0">
+                  <label for="c1{{ u.pk }}">Nueva</label>
+                  <input class="input" type="password" name="new_password1" id="c1{{ u.pk }}" required>
+                </div>
+                <div class="campo mb0" style="margin-top:.4rem">
+                  <label for="c2{{ u.pk }}">Repetir</label>
+                  <input class="input" type="password" name="new_password2" id="c2{{ u.pk }}" required>
+                </div>
+                <button class="btn chico" type="submit" style="margin-top:.5rem">Guardar clave</button>
+              </form>
+            </details>
+            {% if u.is_active %}
+            <form method="post" action="{% url 'configuracion:usuario_recuperacion' u.pk %}"
+                  style="margin-top:.4rem"
+                  onsubmit="return confirm('¿Generar link de recuperación para {{ u.username|escapejs }}? El link anterior deja de servir.')">
+              {% csrf_token %}
+              <button class="btn ghost chico" type="submit">🔗 Link de recuperación</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="vacio">
+      {% if q %}Nadie coincide con «{{ q }}».{% else %}No hay usuarios cargados.{% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

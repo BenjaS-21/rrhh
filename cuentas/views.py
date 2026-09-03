@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, SetPasswordForm
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 from expedientes.auditoria import obtener_ip, registrar
 from expedientes.models import RegistroAuditoria
 from .forms import InvitacionForm, RegistroForm
-from .models import InvitacionRegistro
+from .models import InvitacionRegistro, RecuperacionClave
 
 
 def destino_seguro(request, propuesto):
@@ -193,4 +193,39 @@ def registro(request, token):
 
     return render(request, "cuentas/registro.html", {
         "form": form, "invitacion": invitacion,
+    })
+
+
+@never_cache
+def recuperar_clave(request, token):
+    """Recuperación pública de la clave, con el link que da el Administrador.
+
+    No pide la clave vieja: el link ya es la prueba (un solo uso, vence a las
+    48 horas). Si el usuario está desactivado, el link no sirve.
+    """
+    rec = get_object_or_404(RecuperacionClave, token=token)
+
+    if not rec.esta_vigente or not rec.usuario.is_active:
+        return render(request, "cuentas/recuperar_invalido.html",
+                      {"recuperacion": rec}, status=410)
+
+    form = SetPasswordForm(rec.usuario, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        rec.usada_en = timezone.now()
+        rec.activa = False
+        rec.save(update_fields=["usada_en", "activa"])
+        # Cualquier otro link activo del mismo usuario queda inservible.
+        RecuperacionClave.objects.filter(
+            usuario=rec.usuario, activa=True).update(activa=False)
+        registrar(request, RegistroAuditoria.Accion.EDITAR, entidad="Usuario",
+                  objeto_id=rec.usuario.pk,
+                  descripcion=f"Recuperó su clave por link: '{rec.usuario.username}'")
+        messages.success(request, "Clave actualizada. Entrá con tu nueva contraseña.")
+        return redirect("cuentas:login")
+
+    for campo in form.fields.values():
+        campo.widget.attrs.setdefault("class", "input")
+    return render(request, "cuentas/recuperar.html", {
+        "form": form, "recuperacion": rec,
     })

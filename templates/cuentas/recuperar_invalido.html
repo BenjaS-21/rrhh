@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Link no válido — {{ sistema }}{% endblock %}
+{% block contenedor_clase %}login-wrap{% endblock %}
+
+{% block contenido %}
+<aside class="login-marca">
+  <span class="logo-damasco">{% include "damasco/logo.html" %}</span>
+  <h2>Link no disponible</h2>
+  <p>Este link de recuperación ya no se puede usar.</p>
+</aside>
+
+<section class="login-form-side">
+  <div class="login-card">
+    <h1>Recuperación {{ recuperacion.estado|lower }}</h1>
+    <p class="mut">
+      {% if recuperacion.esta_usada %}
+        Este link ya se usó para cambiar la clave y no puede reutilizarse.
+      {% elif recuperacion.esta_expirada %}
+        El link caducó (valen 48 horas). Pedile al administrador que genere uno nuevo.
+      {% elif not recuperacion.usuario.is_active %}
+        La cuenta está desactivada. Consultá con el administrador.
+      {% else %}
+        El link fue anulado por el administrador.
+      {% endif %}
+    </p>
+    <a class="btn sec" href="{% url 'cuentas:login' %}">Ir al inicio de sesión</a>
+  </div>
+</section>
+{% endblock %}

@@ -60,11 +60,12 @@ class UsuarioAdmin(UserAdmin):
     list_display = ("username", "get_full_name", "rol", "descripcion_alcance",
                     "departamento", "is_active")
     list_filter = ("rol", "acceso_nacional", "zona", "departamento", "is_active")
-    search_fields = ("username", "first_name", "last_name", "email")
+    search_fields = ("username", "first_name", "last_name", "email", "cedula")
 
     fieldsets = UserAdmin.fieldsets + (
         ("Rol, alcance y departamento", {
-            "fields": ("rol", "acceso_nacional", "zona", "departamento", "telefono"),
+            "fields": ("rol", "acceso_nacional", "zona", "departamento", "telefono",
+                       "cedula"),
             "description": "El alcance sale de una de las dos cosas: una zona, o "
                            "«acceso a todas las zonas». Sin ninguna de las dos el "
                            "usuario entra pero no ve ningún expediente.",

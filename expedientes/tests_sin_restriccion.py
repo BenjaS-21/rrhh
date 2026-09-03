@@ -118,7 +118,7 @@ class SinRestriccion(TestCase):
             "sede": self.maracaibo.pk, "estado": "ACTIVO"})
         self.assertEqual(r.status_code, 302)
         self.beto.refresh_from_db()
-        self.assertEqual(self.beto.apellidos, "Editado")
+        self.assertEqual(self.beto.apellidos, "EDITADO")
 
     # --- Lo que NO cambió -----------------------------------------------------
     def test_borrar_sigue_siendo_solo_del_administrador(self):

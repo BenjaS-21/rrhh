@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block titulo %}Renovaciones — {{ sistema }}{% endblock %}
+
+{% block contenido %}
+<div class="pagina-header">
+  <div>
+    <h1>Renovaciones de contrato</h1>
+    <div class="subtitulo">
+      Trabajadores activos según la fecha de fin de contrato. Los vencidos
+      aparecen en todos los rangos: son los más urgentes.
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" class="flex" style="gap:.6rem; align-items:center">
+    <label class="pequeno mut mb0" for="rango">Ver</label>
+    <select class="select" name="rango" id="rango" onchange="this.form.submit()">
+      <option value="vencidos" {% if rango == "vencidos" %}selected{% endif %}>Ya vencidos</option>
+      <option value="30" {% if rango == "30" %}selected{% endif %}>Vencen en 30 días</option>
+      <option value="60" {% if rango == "60" %}selected{% endif %}>Vencen en 60 días</option>
+      <option value="90" {% if rango == "90" %}selected{% endif %}>Vencen en 90 días</option>
+      <option value="todos" {% if rango == "todos" %}selected{% endif %}>Todos los que tienen fecha</option>
+      <option value="sin-fecha" {% if rango == "sin-fecha" %}selected{% endif %}>Sin fecha cargada</option>
+    </select>
+    <span class="pequeno mut">{{ filas|length }} trabajador{{ filas|length|pluralize:"es" }}</span>
+  </form>
+</div>
+
+<div class="card">
+  {% if filas %}
+  <div class="tabla-scroll">
+    <table class="datos">
+      <thead>
+        <tr>
+          <th>Trabajador</th><th>Tienda</th><th>Cargo</th><th>Ingreso</th>
+          <th>Fin de contrato</th><th>Estado</th><th>Cambiar fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in filas %}
+        <tr>
+          <td>
+            <a href="{% url 'expedientes:trabajador_detail' t.pk %}">
+              <strong>{{ t.apellidos }}, {{ t.nombres }}</strong>
+            </a>
+            <div class="pequeno mut">{{ t.cedula_completa }}</div>
+          </td>
+          <td class="pequeno">{{ t.sede.nombre }}</td>
+          <td class="pequeno">{{ t.puesto|default:"—" }}</td>
+          <td class="mut pequeno">{{ t.fecha_ingreso|date:"d/m/Y"|default:"—" }}</td>
+          <td>
+            {% if t.fin %}
+              {{ t.fin|date:"d/m/Y" }}
+              {% if t.contratacion.duracion_dias %}
+                <div class="pequeno mut">{{ t.contratacion.duracion_dias }} días de contrato</div>
+              {% endif %}
+            {% else %}
+              <span class="mut">Sin fecha</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.dias_restantes is not None %}
+              {% if t.dias_restantes < 0 %}
+                <span class="badge rojo">Vencido hace {{ t.dias_vencido }} día{{ t.dias_vencido|pluralize:"s" }}</span>
+              {% elif t.dias_restantes == 0 %}
+                <span class="badge rojo">Vence hoy</span>
+              {% elif t.dias_restantes <= 90 %}
+                <span class="badge amarillo">{{ t.dias_restantes }} día{{ t.dias_restantes|pluralize:"s" }}</span>
+              {% else %}
+                <span class="badge verde">{{ t.dias_restantes }} días</span>
+              {% endif %}
+            {% else %}
+              <span class="badge gris">Sin fecha</span>
+            {% endif %}
+          </td>
+          <td style="min-width:290px">
+            <form method="post" action="{% url 'expedientes:renovacion_guardar' t.pk %}"
+                  class="flex" style="gap:.3rem">
+              {% csrf_token %}
+              <input type="hidden" name="rango" value="{{ rango }}">
+              <input class="input" type="date" name="fecha_culminacion"
+                     value="{{ t.fin|date:'Y-m-d'|default:'' }}">
+              <button class="btn chico" type="submit">Guardar</button>
+            </form>
+            {# Un clic y queda: encadena 90 días sin tocar nada más del expediente. #}
+            <form method="post" action="{% url 'expedientes:renovacion_renovar' t.pk %}"
+                  style="margin-top:.35rem"
+                  onsubmit="return confirm('¿Renovar el contrato de {{ t.nombre_completo|escapejs }} por 90 días más? No crea una ficha nueva: actualiza esta misma.')">
+              {% csrf_token %}
+              <input type="hidden" name="rango" value="{{ rango }}">
+              <button class="btn sec chico" type="submit">↻ Renovar 90 días</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="vacio">
+      {% if rango == "sin-fecha" %}
+        Todos los trabajadores activos tienen su fecha de fin de contrato cargada.
+      {% elif rango == "vencidos" %}
+        Ningún contrato vencido. 
+      {% else %}
+        Nadie vence en ese rango.
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -163,7 +163,13 @@ class TrabajadorForm(forms.ModelForm):
         cuelga cada cargo de una unidad, pero eso es de dónde salió el nombre,
         no dónde puede usarse.
         """
-        return super().clean()
+        datos = super().clean()
+        # El sistema trabaja todo el personal en mayúsculas (convención de la
+        # empresa); lo que se escribe a mano llegaba como saliera del teclado.
+        for campo in ("nombres", "apellidos"):
+            if datos.get(campo):
+                datos[campo] = datos[campo].upper()
+        return datos
 
 
 class DocumentoForm(forms.ModelForm):
@@ -450,6 +456,17 @@ class DatosContratacionForm(forms.ModelForm):
 
     def clean_numero_cuenta(self):
         return self._solo_digitos("numero_cuenta")
+
+    def clean(self):
+        """Los textos identificatorios van en mayúsculas, como toda la data de
+        la empresa. Horario y observaciones no: son prosa que sale impresa en
+        los contratos y las mayúsculas sostenidas se leen peor ahí."""
+        datos = super().clean()
+        for campo in ("direccion", "ciudad_nacimiento", "banco", "ciudad_firma",
+                      "responsable"):
+            if datos.get(campo):
+                datos[campo] = datos[campo].upper()
+        return datos
 
     def _talla(self, nombre):
         """Normaliza la talla: sin espacios sobrantes y en mayúscula.

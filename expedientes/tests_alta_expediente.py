@@ -51,7 +51,7 @@ class AlCrearSeLlegaAlExpediente(TestCase):
         r = self.client.get(self.alta()["Location"])
         self.assertEqual(r.status_code, 200)
         cuerpo = r.content.decode()
-        self.assertIn("Velazco", cuerpo)
+        self.assertIn("VELAZCO", cuerpo)
         self.assertIn("Documentos del expediente", cuerpo)
         self.assertIn("Expediente creado correctamente", cuerpo)
 
@@ -224,3 +224,93 @@ class ElRifEsOpcionalYQuedaEnLaFicha(TestCase):
     def test_en_el_detalle_no_sale_cuando_esta_vacio(self):
         self.alta()
         self.assertNotIn("<th>RIF</th>", self.detalle())
+
+
+class LoQueSeEscribeEntraEnMayusculas(TestCase):
+    """La empresa trabaja la data en mayúsculas; el formulario lo garantiza
+    para que no vuelva a entrar "Ana" conviviendo con "ANA"."""
+
+    @classmethod
+    def setUpTestData(cls):
+        zona = Zona.objects.create(nombre="MIRANDA")
+        cls.sede = Sede.objects.create(nombre="TRINIDAD", zona=zona)
+        cls.admin = Usuario.objects.create_user(username="adm", password=CLAVE)
+        cls.admin.rol = Usuario.Rol.ADMIN
+        cls.admin.save()
+
+    def alta(self, **cambios):
+        datos = {"documento_identidad": "V-30719983", "nombres": "Benjamin",
+                 "apellidos": "Velazco", "sede": self.sede.pk}
+        datos.update(cambios)
+        self.client.force_login(self.admin)
+        return self.client.post(reverse("expedientes:trabajador_create"), datos)
+
+    def test_nombres_y_apellidos(self):
+        self.alta(nombres="benjamin gabriel", apellidos="velazco mora")
+        t = Trabajador.objects.get()
+        self.assertEqual(t.nombres, "BENJAMIN GABRIEL")
+        self.assertEqual(t.apellidos, "VELAZCO MORA")
+
+    def test_los_datos_de_contratacion(self):
+        self.alta(**{"contrato-direccion": "calle bolivar, casa 5",
+                     "contrato-banco": "banco de venezuela",
+                     "contrato-ciudad_nacimiento": "caracas",
+                     "contrato-ciudad_firma": "guatire",
+                     "contrato-responsable": "maria perez"})
+        c = DatosContratacion.objects.get()
+        self.assertEqual(c.direccion, "CALLE BOLIVAR, CASA 5")
+        self.assertEqual(c.banco, "BANCO DE VENEZUELA")
+        self.assertEqual(c.ciudad_nacimiento, "CARACAS")
+        self.assertEqual(c.ciudad_firma, "GUATIRE")
+        self.assertEqual(c.responsable, "MARIA PEREZ")
+
+    def test_el_horario_queda_como_se_escribio(self):
+        """Es prosa impresa en el contrato: ahí las mayúsculas se leen peor."""
+        self.alta(**{"contrato-horario": "8:00AM a 5:00PM de lunes a sábado"})
+        c = DatosContratacion.objects.get()
+        self.assertEqual(c.horario, "8:00AM a 5:00PM de lunes a sábado")
+
+
+class DuracionSinIngresoNoPasa(TestCase):
+    """El caso real: la fecha de ingreso tecleada en «fecha fin» y el
+    expediente quedaba sin ingreso. Con duración o fecha fin cargadas, el
+    ingreso es obligatorio; solo así no vuelve a pasar."""
+
+    @classmethod
+    def setUpTestData(cls):
+        zona = Zona.objects.create(nombre="MIRANDA")
+        cls.sede = Sede.objects.create(nombre="TRINIDAD", zona=zona)
+        cls.admin = Usuario.objects.create_user(username="adm", password=CLAVE)
+        cls.admin.rol = Usuario.Rol.ADMIN
+        cls.admin.save()
+
+    def alta(self, **cambios):
+        datos = {"documento_identidad": "V-30719983", "nombres": "Benjamin",
+                 "apellidos": "Velazco", "sede": self.sede.pk}
+        datos.update(cambios)
+        self.client.force_login(self.admin)
+        return self.client.post(reverse("expedientes:trabajador_create"), datos)
+
+    def test_duracion_sin_ingreso_no_guarda(self):
+        r = self.alta(**{"contrato-duracion_dias": "90"})
+        self.assertEqual(Trabajador.objects.count(), 0)
+        self.assertIn("la fecha de ingreso hace falta", r.content.decode())
+
+    def test_fecha_fin_sin_ingreso_no_guarda(self):
+        r = self.alta(**{"contrato-fecha_culminacion": "2026-11-29"})
+        self.assertEqual(Trabajador.objects.count(), 0)
+        self.assertIn("la fecha de ingreso hace falta", r.content.decode())
+
+    def test_sin_ingreso_y_sin_contrato_si_se_puede(self):
+        """El ingreso sigue siendo opcional por sí solo: se frena la mezcla."""
+        r = self.alta()
+        self.assertEqual(r.status_code, 302)
+        self.assertIsNone(Trabajador.objects.get().fecha_ingreso)
+
+    def test_con_ingreso_y_duracion_calcula_la_fin(self):
+        self.alta(fecha_ingreso="2026-09-01",
+                  **{"contrato-duracion_dias": "90"})
+        t = Trabajador.objects.get()
+        import datetime
+        self.assertEqual(t.contratacion.fecha_culminacion,
+                         datetime.date(2026, 11, 30))
