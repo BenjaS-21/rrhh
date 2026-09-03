@@ -138,10 +138,21 @@ class BotonesEnLaPantalla(BaseDocumentos):
 
     @patch("expedientes.pdf.hay_conversor", return_value=False)
     def test_sin_word_solo_queda_el_de_word_y_se_explica(self, hay):
+        """Vale para los documentos que SÍ hay que convertir.
+
+        Esta prueba miraba la página entera —«que no aparezca `formato=pdf` en
+        ningún lado»— y era cierto mientras los siete documentos nacían en
+        Word. La lista de verificación ya nace en PDF y no se convierte, así
+        que ahora sí ofrece su descarga en una máquina sin Word: eso es el
+        arreglo, no la falla. Lo que esta prueba cuida —que no se prometa un
+        PDF que el servidor no puede armar— se comprueba sobre el contrato.
+        La lista tiene su propio par de testigos en
+        `tests_lista_verificacion.py`.
+        """
         self.client.force_login(self.admin)
         cuerpo = self.client.get(self.url_detalle()).content.decode()
-        self.assertNotIn("formato=pdf", cuerpo)
-        self.assertNotIn("formato=imprimir", cuerpo)
+        self.assertNotIn("documentos/contrato/?formato=pdf", cuerpo)
+        self.assertNotIn("documentos/contrato/?formato=imprimir", cuerpo)
         self.assertIn("no tiene Word instalado", cuerpo)
         # El Word se sigue pudiendo bajar: no se pierde la función.
         self.assertIn("documentos/contrato/", cuerpo)

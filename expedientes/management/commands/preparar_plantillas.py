@@ -50,12 +50,20 @@ class Command(BaseCommand):
         destino.mkdir(parents=True, exist_ok=True)
 
         for clave, meta in PLANTILLAS.items():
-            archivo = self._buscar(origen, meta["origen"])
+            archivo, descartados = self._buscar(origen, meta["origen"])
             if archivo is None:
                 self.stderr.write(self.style.ERROR(
                     f"  {clave}: no encontré '{meta['origen']}' en {origen}"
                 ))
                 continue
+            if descartados:
+                self.stderr.write(self.style.WARNING(
+                    f"  {clave}: hay más de un original que sirve. Uso "
+                    f"'{archivo.name}' y dejo afuera "
+                    + ", ".join(f"'{d.name}'" for d in descartados)
+                    + ". Si el bueno es uno de ésos, borrá el otro y volvé a "
+                      "correr esto."
+                ))
 
             salida = destino / meta["archivo"]
             preparador = getattr(self, f"_preparar_{clave}", None)
@@ -72,18 +80,33 @@ class Command(BaseCommand):
 
     @staticmethod
     def _buscar(carpeta, nombre):
-        """Busca el archivo tolerando acentos y numeración del nombre."""
-        exacto = carpeta / nombre
-        if exacto.exists():
-            return exacto
+        """Busca el original tolerando acentos y numeración del nombre.
+
+        Devuelve `(elegido, descartados)`.
+
+        La búsqueda es por prefijo porque Gestión Humana manda las revisiones
+        con el nombre cambiado: la misma lista de verificación llegó una vez
+        como «... 20072026.pdf» y otra como «... 20072026 AGOSTO.pdf».
+
+        El precio de esa tolerancia es que si la revisión queda AL LADO de la
+        vieja en la carpeta, el nombre exacto gana y la nueva se ignora sin
+        decir una palabra. Un formulario legal desactualizado que sale igual de
+        bien es peor que uno que falla: por eso los descartados se devuelven y
+        quien prepara las plantillas se entera y decide.
+        """
         clave = re.sub(r"[^a-z0-9]", "", nombre.lower())[:14]
-        for p in carpeta.iterdir():
+        candidatos = []
+        for p in sorted(carpeta.iterdir()):
             # El .pdf es la lista de verificación, que no vino en Word.
             if p.suffix.lower() not in (".docx", ".rtf", ".pdf"):
                 continue
             if re.sub(r"[^a-z0-9]", "", p.name.lower()).startswith(clave):
-                return p
-        return None
+                candidatos.append(p)
+        if not candidatos:
+            return None, []
+        exacto = carpeta / nombre
+        elegido = exacto if exacto in candidatos else candidatos[0]
+        return elegido, [p for p in candidatos if p != elegido]
 
     @staticmethod
     def _abrir_docx(origen):

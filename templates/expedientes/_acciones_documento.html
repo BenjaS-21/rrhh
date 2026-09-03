@@ -4,9 +4,15 @@ Botones de un documento corporativo: Word, PDF e Imprimir.
 Los iconos van como SVG en línea y no como archivos ni tipografía externa: así
 se ven aunque no haya internet y no suman pedidos al servidor.
 
+La lista de verificación (`p.es_pdf`) es la excepción: no vino en Word, ya nace
+en PDF. Ofrecerle un botón «Word» sería mentirle a quien lo aprieta —bajaría un
+PDF con el icono y el texto de un Word— y esconderle el botón de descarga en un
+servidor sin Word sería peor todavía, porque esa hoja no necesita convertirse.
+
 Espera en el contexto: `trabajador`, `p` (la plantilla) y `hay_pdf`.
 {% endcomment %}
 <div class="acciones-doc">
+  {% if not p.es_pdf %}
   <a class="btn sec chico"
      href="{% url 'expedientes:documento_generar' trabajador.pk p.clave %}"
      title="Descargar en Word para editarlo antes de firmar">
@@ -17,11 +23,12 @@ Espera en el contexto: `trabajador`, `p` (la plantilla) y `hay_pdf`.
     </svg>
     Word
   </a>
+  {% endif %}
 
-  {% if hay_pdf %}
+  {% if hay_pdf or p.es_pdf %}
   <a class="btn sec chico"
      href="{% url 'expedientes:documento_generar' trabajador.pk p.clave %}?formato=pdf"
-     title="Descargar en PDF, idéntico al Word">
+     title="{% if p.es_pdf %}Descargar la hoja en PDF, con los datos puestos y las casillas vacías{% else %}Descargar en PDF, idéntico al Word{% endif %}">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
       <path d="M14 2v6h6"/>

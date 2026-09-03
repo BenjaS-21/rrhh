@@ -17,6 +17,7 @@ casillas que nadie revisó.
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -26,6 +27,8 @@ from cuentas.models import (Cargo, Departamento, Sede, TipoDocumentoIdentidad,
                             Zona)
 from expedientes import documentos as generador
 from expedientes.formulario_pdf import CAMPOS, FormularioCambio, rellenar_pdf
+from expedientes.management.commands.preparar_plantillas import (
+    Command as Preparador)
 from expedientes.models import (AsignacionPago, ConceptoPago, Moneda,
                                 Trabajador)
 from expedientes.tests_documentos import falta_plantillas, texto_pdf
@@ -355,3 +358,154 @@ class SeDescargaYSeImprime(_ConExpediente):
         """Mismo permiso que los demás documentos: trae sueldos."""
         self.client.force_login(self.mirona)
         self.assertEqual(self.client.get(self.url()).status_code, 403)
+
+
+@falta_plantillas
+class LosBotonesDeLaFilaNoPrometenUnWordQueNoExiste(_ConExpediente):
+    """La fila de la lista de verificación en la ficha del trabajador.
+
+    Los otros seis documentos salen en Word y se convierten a PDF con el Word
+    del servidor. Éste no: ya viene en PDF. Eso cambia los botones en dos
+    sentidos, y los dos se rompen por separado:
+
+    * **no hay Word que ofrecer.** Un botón «Word» con icono de Word bajaba un
+      PDF. Quien lo aprieta espera abrirlo y editarlo antes de firmar, y se
+      encuentra con otra cosa;
+    * **no hace falta que el servidor tenga Word.** Los botones de PDF e
+      Imprimir están escondidos cuando no hay conversor, porque sin él los
+      otros seis no se pueden convertir. Esta hoja no se convierte, así que
+      esconderla dejaba sin descarga justo al documento que no la necesitaba.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.admin = Usuario.objects.create_user(
+            username="jefa2", password=CLAVE_USUARIO, rol=Usuario.Rol.ADMIN)
+
+    def filas(self, hay_word=True):
+        """{título del documento: HTML de sus botones}."""
+        import re
+        from unittest.mock import patch
+
+        self.client.force_login(self.admin)
+        with patch("expedientes.pdf.hay_conversor", return_value=hay_word):
+            cuerpo = self.client.get(
+                reverse("expedientes:trabajador_detail",
+                        args=[self.trabajador.pk])).content.decode()
+        return {titulo.strip(): botones for titulo, botones in
+                re.findall(r"<tr>\s*<td>([^<]+)</td>\s*<td[^>]*>(.*?)</td>",
+                           cuerpo, re.S)}
+
+    def test_la_fila_no_ofrece_word(self):
+        filas = self.filas()
+        titulo = generador.PLANTILLAS[CLAVE]["titulo"]
+        self.assertIn(titulo, filas, "la lista no aparece entre los documentos")
+        self.assertNotIn(">\n    Word", filas[titulo])
+        self.assertNotIn("Word", filas[titulo])
+
+    def test_los_demas_documentos_si_ofrecen_word(self):
+        """Testigo: si el botón hubiera desaparecido de todos, lo de arriba
+        pasaría igual y nadie podría editar un contrato antes de firmarlo."""
+        filas = self.filas()
+        for clave, meta in generador.PLANTILLAS.items():
+            if clave == CLAVE:
+                continue
+            with self.subTest(documento=clave):
+                self.assertIn("Word", filas[meta["titulo"]])
+
+    def test_se_puede_bajar_e_imprimir_aunque_el_servidor_no_tenga_word(self):
+        botones = self.filas(hay_word=False)[generador.PLANTILLAS[CLAVE]["titulo"]]
+        self.assertIn("formato=pdf", botones)
+        self.assertIn("formato=imprimir", botones)
+
+    def test_los_demas_si_dependen_de_que_el_servidor_tenga_word(self):
+        """Testigo del anterior: esos seis sí hay que convertirlos."""
+        filas = self.filas(hay_word=False)
+        for clave, meta in generador.PLANTILLAS.items():
+            if clave == CLAVE:
+                continue
+            with self.subTest(documento=clave):
+                self.assertNotIn("formato=pdf", filas[meta["titulo"]])
+
+
+class CuandoLlegaUnaRevisionConOtroNombre(TestCase):
+    """`preparar_plantillas` busca el original por prefijo del nombre.
+
+    Tiene que ser así: la misma hoja llegó una vez como
+    «CHECK VERIFICACION EXPEDENTES ACTUALIZADA 20072026.pdf» y otra como
+    «... 20072026 AGOSTO.pdf». Gestión Humana revisa el formato («Versión: 01»
+    está impreso en el encabezado) y no avisa cómo va a llamar al archivo.
+
+    Lo que no puede pasar es que la revisión quede al lado de la vieja y el
+    comando siga usando la vieja en silencio: sale una hoja legal desactualizada
+    que se ve perfecta y nadie la mira dos veces.
+    """
+
+    ORIGEN = generador.PLANTILLAS[CLAVE]["origen"]
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        self.carpeta = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.carpeta, ignore_errors=True)
+
+    def poner(self, *nombres):
+        for nombre in nombres:
+            (self.carpeta / nombre).write_bytes(b"%PDF-falso")
+
+    def test_encuentra_la_revision_aunque_le_hayan_cambiado_el_nombre(self):
+        self.poner("CHECK VERIFICACION EXPEDENTES ACTUALIZADA 20072026 AGOSTO.pdf")
+        elegido, descartados = Preparador._buscar(self.carpeta, self.ORIGEN)
+        self.assertIsNotNone(elegido, "no encontró la hoja con el nombre nuevo")
+        self.assertIn("AGOSTO", elegido.name)
+        self.assertEqual(descartados, [])
+
+    def test_si_estan_las_dos_avisa_cual_dejo_afuera(self):
+        self.poner(self.ORIGEN,
+                   "CHECK VERIFICACION EXPEDENTES ACTUALIZADA 20072026 AGOSTO.pdf")
+        elegido, descartados = Preparador._buscar(self.carpeta, self.ORIGEN)
+        self.assertEqual(elegido.name, self.ORIGEN)
+        self.assertEqual([d.name for d in descartados],
+                         ["CHECK VERIFICACION EXPEDENTES ACTUALIZADA "
+                          "20072026 AGOSTO.pdf"])
+
+    def test_el_aviso_sale_por_pantalla_y_nombra_los_dos_archivos(self):
+        """Con `PLANTILLAS_DIR` desviado a una carpeta de paso.
+
+        Sin eso el comando escribe encima de las plantillas de verdad —lo hizo
+        una vez mientras se escribía esta prueba, y dejó la lista de
+        verificación convertida en diez bytes de mentira— y las pruebas de
+        arriba empiezan a fallar por algo que no tiene nada que ver.
+        """
+        from io import StringIO
+
+        from django.core.management import call_command
+        from django.test import override_settings
+
+        self.poner(self.ORIGEN,
+                   "CHECK VERIFICACION EXPEDENTES ACTUALIZADA 20072026 AGOSTO.pdf")
+        errores = StringIO()
+        with override_settings(PLANTILLAS_DIR=str(self.carpeta / "salida")):
+            call_command("preparar_plantillas", origen=str(self.carpeta),
+                         stdout=StringIO(), stderr=errores)
+        aviso = errores.getvalue()
+        self.assertIn("más de un original", aviso)
+        self.assertIn("AGOSTO", aviso)
+
+    def test_las_plantillas_de_verdad_quedaron_intactas(self):
+        """Testigo del testigo: si la prueba de arriba volviera a escribir en
+        la carpeta real, esto lo dice acá y no doce fallas más abajo."""
+        ruta = generador.ruta_plantilla(CLAVE)
+        self.assertGreater(ruta.stat().st_size, 100_000,
+                           "algo pisó la lista de verificación preparada")
+
+    def test_con_un_solo_original_no_molesta_con_avisos(self):
+        """Testigo: el caso normal es uno solo, y ahí no hay nada que decidir."""
+        self.poner(self.ORIGEN)
+        _, descartados = Preparador._buscar(self.carpeta, self.ORIGEN)
+        self.assertEqual(descartados, [])
+
+    def test_si_no_esta_lo_dice(self):
+        self.assertEqual(Preparador._buscar(self.carpeta, self.ORIGEN), (None, []))

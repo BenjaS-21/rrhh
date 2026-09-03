@@ -186,8 +186,11 @@ def trabajador_detail(request, pk):
         contexto["extras"] = [p for p in pagos if p.concepto_id is None]
 
         # Documentos corporativos: se arman con los mismos datos del expediente.
+        # `es_pdf` distingue a la lista de verificación, que ya nace en PDF: no
+        # tiene Word que ofrecer y tampoco necesita que el servidor lo tenga.
         contexto["plantillas"] = [
-            {"clave": clave, "titulo": meta["titulo"]}
+            {"clave": clave, "titulo": meta["titulo"],
+             "es_pdf": meta["archivo"].lower().endswith(".pdf")}
             for clave, meta in generador.PLANTILLAS.items()
         ]
         contexto["campos_incompletos"] = generador.campos_incompletos(trabajador)
