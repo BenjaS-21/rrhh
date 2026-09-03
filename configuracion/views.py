@@ -136,11 +136,40 @@ CATALOGOS = {
 
 
 def admin_requerido(view):
+    """Administración del sistema: usuarios, claves, respaldo, preferencias.
+
+    Lo que afecta a todos o toca datos de todos. Los catálogos NO van acá:
+    ver `catalogos_requerido`.
+    """
     @wraps(view)
     @login_required
     def wrapper(request, *args, **kwargs):
         if not request.user.es_admin:
             messages.error(request, "Solo el administrador puede acceder a la configuración.")
+            return redirect("expedientes:panel")
+        return view(request, *args, **kwargs)
+    return wrapper
+
+
+def catalogos_requerido(view):
+    """Ver y ampliar los catálogos: quien carga expedientes tiene que poder.
+
+    Nació de un reporte concreto: un contrato salió con el cargo equivocado
+    porque el cargo real de la persona —«LIDER EXPERIENCIA INTERNA»— no estaba
+    entre los 805 del catálogo, y quien cargaba el expediente no podía
+    agregarlo. Tenía que pedírselo al Administrador y, mientras tanto, elegir
+    cualquier otro. El expediente quedaba mal por una traba de permisos.
+
+    Agregar un cargo o una unidad es parte de cargar expedientes, no
+    administrar el sistema. Desactivar sigue siendo del Administrador: eso es
+    borrado lógico, y ahí la regla es la de siempre.
+    """
+    @wraps(view)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not request.user.puede_editar:
+            messages.error(
+                request, "No tenés permiso para modificar los catálogos.")
             return redirect("expedientes:panel")
         return view(request, *args, **kwargs)
     return wrapper
@@ -153,7 +182,7 @@ def _cat(slug):
     return cat
 
 
-@admin_requerido
+@catalogos_requerido
 def index(request):
     tarjetas = []
     for slug, cat in CATALOGOS.items():
@@ -388,7 +417,7 @@ def preferencias(request):
     return render(request, "configuracion/preferencias.html", {"form": form})
 
 
-@admin_requerido
+@catalogos_requerido
 def lista(request, slug):
     cat = _cat(slug)
     campo_activo = cat["activo"]
@@ -491,7 +520,7 @@ def mayusculas(request, slug):
     return redirect("configuracion:lista", slug=slug)
 
 
-@admin_requerido
+@catalogos_requerido
 def crear(request, slug):
     cat = _cat(slug)
     form = cat["form"](_datos(request))
@@ -507,7 +536,7 @@ def crear(request, slug):
     })
 
 
-@admin_requerido
+@catalogos_requerido
 def editar(request, slug, pk):
     cat = _cat(slug)
     obj = get_object_or_404(cat["model"], pk=pk)

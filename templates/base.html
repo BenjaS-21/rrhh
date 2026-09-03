@@ -42,10 +42,14 @@
       <a href="{% url 'expedientes:nomina' %}">Nómina</a>
       {% if user.puede_editar %}
         <a href="{% url 'expedientes:renovaciones' %}">Renovaciones</a>
+        {% comment %}Configuración también: quien carga expedientes necesita
+        poder agregar el cargo o la unidad que le falta, sin pedírselo a
+        nadie. Adentro, desactivar y la administración del sistema siguen
+        siendo del Administrador.{% endcomment %}
+        <a href="{% url 'configuracion:index' %}">Configuración</a>
       {% endif %}
       {% if user.es_admin %}
         <a href="{% url 'cuentas:invitaciones' %}">Invitaciones</a>
-        <a href="{% url 'configuracion:index' %}">Configuración</a>
         <a href="{% url 'expedientes:auditoria_list' %}">Auditoría</a>
         <a href="{% url 'admin:index' %}">Administración</a>
       {% endif %}

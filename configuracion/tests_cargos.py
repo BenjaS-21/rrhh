@@ -66,23 +66,29 @@ class CatalogoDeCargos(TestCase):
         self.client.force_login(self.admin)
         self.assertEqual(self.client.get(self.lista()).status_code, 200)
 
-    # --- Solo el Administrador -------------------------------------------------
-    def test_rrhh_interior_no_entra(self):
+    # --- Quién puede qué ------------------------------------------------------
+    def test_rrhh_interior_entra_y_agrega(self):
+        """Cambió: el catálogo de cargos es el que más falta hace mientras se
+        carga un expediente. Ver `tests_permisos_catalogos.py`."""
         self.client.force_login(self.interior)
-        r = self.client.get(self.lista(), follow=True)
-        self.assertContains(r, "Solo el administrador")
+        self.assertEqual(self.client.get(self.lista()).status_code, 200)
+        self.client.post(reverse("configuracion:crear", args=["cargos"]),
+                         {"nombre": "LIDER EXPERIENCIA INTERNA",
+                          "departamento": self.ventas.pk, "activo": "on"})
+        self.assertTrue(
+            Cargo.objects.filter(nombre="LIDER EXPERIENCIA INTERNA").exists())
 
-    def test_solo_lectura_tampoco_puede_crear(self):
+    def test_solo_lectura_no_puede_crear(self):
         self.client.force_login(self.lectura)
         r = self.client.post(reverse("configuracion:crear", args=["cargos"]),
                              {"nombre": "INVENTADO", "departamento": self.ventas.pk,
                               "activo": "on"}, follow=True)
-        self.assertContains(r, "Solo el administrador")
+        self.assertContains(r, "No tenés permiso")
         self.assertFalse(Cargo.objects.filter(nombre="INVENTADO").exists())
 
     def test_nadie_que_no_sea_admin_puede_desactivar(self):
-        """La regla de siempre: los demás roles ven, agregan y editan lo suyo,
-        pero los catálogos son del Administrador."""
+        """La regla de siempre: los demás roles ven, agregan y editan; borrar
+        —y desactivar es borrado lógico— es del Administrador."""
         cargo = Cargo.objects.get(nombre="VENDEDOR")
         self.client.force_login(self.interior)
         self.client.post(

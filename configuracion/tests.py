@@ -95,17 +95,28 @@ class RegistrarTiendas(BaseConfig):
         self.assertIn("catalogo__nombre", cuerpo)
         self.assertNotIn('class="metrica"', cuerpo)
 
-    def test_solo_el_admin_entra_a_configuracion(self):
+    def test_quien_carga_expedientes_entra_a_configuracion(self):
+        """Cambió a partir de un reporte: un contrato salió con el cargo
+        equivocado porque el cargo real no estaba en el catálogo y quien
+        cargaba el expediente no podía agregarlo. Ver
+        `configuracion/tests_permisos_catalogos.py`."""
         self.client.force_login(self.rrhh)
-        r = self.client.get(reverse("configuracion:index"))
-        self.assertEqual(r.status_code, 302)
-        self.assertNotIn("configuracion", r["Location"])
+        self.assertEqual(
+            self.client.get(reverse("configuracion:index")).status_code, 200)
 
-    def test_un_rol_que_no_es_admin_tampoco_puede_crear_por_POST(self):
+    def test_y_puede_agregar_lo_que_le_falte(self):
         self.client.force_login(self.rrhh)
         self.client.post(reverse("configuracion:crear", args=["tiendas"]),
                          {"nombre": "COLADA", "zona": self.zona.pk, "activa": "on"})
-        self.assertFalse(Sede.objects.filter(nombre="COLADA").exists())
+        self.assertTrue(Sede.objects.filter(nombre="COLADA").exists())
+
+    def test_pero_no_puede_desactivar_nada(self):
+        """Testigo: se abrió agregar y editar, no borrar."""
+        sede = Sede.objects.create(nombre="LA GUAIRA", zona=self.zona)
+        self.client.force_login(self.rrhh)
+        self.client.post(reverse("configuracion:toggle", args=["tiendas", sede.pk]))
+        sede.refresh_from_db()
+        self.assertTrue(sede.activa)
 
 
 class OpcionesDelSistema(BaseConfig):

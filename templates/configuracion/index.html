@@ -30,6 +30,13 @@ que ya estaba cargado había que adivinar que el nombre era un enlace.
   </div>
   {% endfor %}
 
+  {% comment %}
+  De aca abajo es administracion del sistema, no catalogos: toca usuarios,
+  claves, la base entera y lo que esta marcado para eliminar. Los roles que
+  cargan expedientes entran a Configuracion para ampliar los catalogos -por
+  eso pueden-, pero esto sigue siendo del Administrador.
+  {% endcomment %}
+  {% if user.es_admin %}
   <div class="catalogo">
     <div class="catalogo__icono">🗑️</div>
     <a class="catalogo__nombre" href="{% url 'configuracion:pendientes' %}">Pendientes de eliminar</a>
@@ -71,5 +78,6 @@ que ya estaba cargado había que adivinar que el nombre era un enlace.
     <div class="catalogo__dato">Expedientes que podrían ser la misma persona dos veces.</div>
     <a class="btn sec chico" href="{% url 'configuracion:duplicados' %}">Revisar</a>
   </div>
+  {% endif %}
 </div>
 {% endblock %}
