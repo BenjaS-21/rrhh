@@ -2,6 +2,7 @@
 
 import mimetypes
 import os
+import re
 from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import quote
@@ -261,6 +262,79 @@ def documento_generar(request, pk, clave):
         f'{disposicion}; filename="{nombre}"; '
         f"filename*=UTF-8''{quote(nombre)}"
     )
+    return respuesta
+
+
+@login_required
+def documentos_todos(request, pk):
+    """Todos los documentos del expediente en un solo PDF, para imprimirlos.
+
+    Pedido de quien usa el sistema: «¿podrás poner un botón donde se pueda
+    imprimir todos los documentos corporativos?». Eran siete botones de
+    Imprimir, uno por uno, y siete veces el diálogo de impresión, por cada
+    persona que entra. Con una tanda de ingresos son cientos de clics.
+
+    Sale un PDF y no un ZIP a propósito: un ZIP hay que descargar,
+    descomprimir y abrir siete archivos: no se puede imprimir de una. Un solo
+    PDF se abre en el visor del navegador y se imprime en un viaje, y además
+    queda en el orden en que se firman.
+    """
+    import pymupdf
+
+    trabajador = get_object_or_404(
+        Trabajador.objects.select_related("sede", "sede__zona", "puesto",
+                                          "tipo_documento"), pk=pk
+    )
+    exigir_gestionar_pagos(request.user, trabajador)
+
+    if not conversor.hay_conversor():
+        messages.error(
+            request,
+            "Para juntarlos en un solo PDF hace falta Word en la máquina del "
+            "servidor. Mientras tanto se pueden bajar de a uno.")
+        return redirect("expedientes:trabajador_detail", pk=trabajador.pk)
+
+    juntos = pymupdf.open()
+    incluidos, fallaron = [], []
+    for clave, meta in generador.PLANTILLAS.items():
+        try:
+            contenido, nombre, _ = generador.generar(clave, trabajador)
+            if not nombre.lower().endswith(".pdf"):
+                contenido = conversor.convertir_a_pdf(contenido, nombre)
+        except (FileNotFoundError, conversor.ConversionNoDisponible) as e:
+            # Uno que falle no puede dejar sin imprimir a los otros seis: la
+            # persona está esperando para armar la carpeta.
+            fallaron.append(f"{meta['titulo']} ({e})")
+            continue
+        with pymupdf.open(stream=contenido, filetype="pdf") as uno:
+            juntos.insert_pdf(uno)
+        incluidos.append(meta["titulo"])
+
+    if not incluidos:
+        juntos.close()
+        messages.error(request, "No se pudo generar ninguno de los documentos.")
+        return redirect("expedientes:trabajador_detail", pk=trabajador.pk)
+
+    datos = juntos.tobytes(garbage=3, deflate=True)
+    juntos.close()
+
+    if fallaron:
+        messages.warning(
+            request,
+            "Quedaron afuera: " + "; ".join(fallaron) + ". El resto va en el PDF.")
+
+    registrar(request, RegistroAuditoria.Accion.DESCARGAR,
+              entidad="Documento generado", objeto_id=trabajador.pk,
+              descripcion=f"Abrió para imprimir los {len(incluidos)} documentos "
+                          f"de {trabajador}")
+
+    persona = re.sub(r"[^\w\s-]", "", str(trabajador)).strip().replace(" ", "_")
+    nombre = f"Documentos - {persona or 'trabajador'}.pdf"
+    respuesta = HttpResponse(datos, content_type="application/pdf")
+    # Inline: el visor del navegador ya trae el botón de imprimir y no deja
+    # un archivo suelto en Descargas por cada expediente.
+    respuesta["Content-Disposition"] = (
+        f'inline; filename="{nombre}"; filename*=UTF-8\'\'{quote(nombre)}')
     return respuesta
 
 

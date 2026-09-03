@@ -21,9 +21,18 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from expedientes.documentos import MESES, PLANTILLAS, _completar_raiz
+from expedientes.documentos import (MESES, PLANTILLAS, _completar_raiz,
+                                    normalizar_campo)
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+# Cédula del representante legal de la empresa. Está escrita en las plantillas
+# (no es un campo: no depende del trabajador) y venía sin la letra.
+CEDULA_DEL_EMPLEADOR = "17158865"
+
+# Los nombres con que las plantillas llaman al campo de la cédula del
+# trabajador. Ya viene con su letra ("V-26045681", "E-84512233").
+CAMPOS_DE_CEDULA = ("cedula", "columna1")
 
 
 class Command(BaseCommand):
@@ -115,8 +124,120 @@ class Command(BaseCommand):
                 cambios += 1
         cambios += self._separar_domicilio_legal(root)
         cambios += self._no_partir_las_firmas(root)
+        cambios += self._cedula_del_empleador(root)
+        cambios += self._una_sola_letra_en_la_cedula(root)
         self._guardar_docx(partes, root, salida)
         return cambios
+
+    # -- La cédula del representante legal lleva su letra -------------------
+    @staticmethod
+    def _cedula_del_empleador(root):
+        """Le pone la «V-» a la cédula del representante legal de la empresa.
+
+        Reporte: «en el número de cédula del jefe falta la V-». La del
+        trabajador sale del expediente y ya viene con la letra; la del
+        empleador está escrita en la plantilla y venía pelada, así que el
+        mismo contrato mostraba una con letra y la otra sin, una al lado de la
+        otra en el bloque de firmas.
+
+        Cuidado con la trampa: en el mismo párrafo del cuerpo está el RIF de
+        la empresa, «V-17158865-7», que ya tiene su letra y su dígito
+        verificador. Un reemplazo a lo bruto lo dejaría en «V-V-17158865-7».
+        De ahí el `(?<!V-)`.
+
+        El acuerdo de confidencialidad ya la trae bien («Nro. V-17.158.865») y
+        no se toca: el paso es idempotente.
+        """
+        pelada = re.compile(r"(?<!V-)(?<!\d)" + CEDULA_DEL_EMPLEADOR)
+        # "Nro.17158865" venía sin el espacio, y con la letra delante se lee
+        # peor todavía: "Nro.V-17158865". A veces el "Nro." está en el mismo
+        # run que el número y a veces en el anterior; se cubren los dos.
+        sin_espacio = re.compile("Nro[.](?=" + CEDULA_DEL_EMPLEADOR + ")")
+        cambios = 0
+        for parrafo in root.iter(W + "p"):
+            anterior = None
+            for t in parrafo.iter(W + "t"):
+                texto = t.text or ""
+                if CEDULA_DEL_EMPLEADOR in texto and pelada.search(texto):
+                    texto = sin_espacio.sub("Nro. ", texto)
+                    t.text = pelada.sub("V-" + CEDULA_DEL_EMPLEADOR, texto)
+                    if anterior is not None and (anterior.text or "").endswith("Nro."):
+                        anterior.text += " "
+                    cambios += 1
+                if t.text:
+                    anterior = t
+        return cambios
+
+    # -- La cédula del trabajador ya trae su letra --------------------------
+    @staticmethod
+    def _una_sola_letra_en_la_cedula(root):
+        """Saca la «V-» que las plantillas traen escrita antes del campo Cédula.
+
+        `Cedula` sale de `cedula_completa`, que ya devuelve «V-26045681» con su
+        letra: vive en un solo lugar justamente para que no se arme distinta en
+        cada documento. Pero dos plantillas traían además una «V-» escrita a
+        mano delante del campo, así que el documento decía «V-V-26045681».
+
+        No lo reportó nadie: apareció al escribir la prueba de la cédula del
+        empleador. El contrato corporativo ya tenía este arreglo hecho a
+        medida; acá se generaliza, porque el acta de beneficios y el acuerdo de
+        confidencialidad lo traían igual y nadie lo había visto.
+
+        Y hay un caso peor que el doble: el tipo de documento es configurable
+        (V, E, J, P, G). Con la «V-» escrita en la plantilla, un extranjero
+        salía «V-E-12345678» —una cédula que no es la suya—.
+
+        Vienen de dos formas: pegada al marcador en el mismo run
+        («número V-{{CEDULA}}») o en dos runs sueltos, «V» y «-», justo antes
+        del campo de combinación.
+        """
+        cambios = 0
+
+        # Forma 1: "V-{{CEDULA}}" en el mismo run.
+        pegada = re.compile(r"[VvEeJjPpGg]\s*[-–]\s*(?=\{\{CEDULA\}\})")
+        for t in root.iter(W + "t"):
+            if t.text and "{{CEDULA}}" in t.text and pegada.search(t.text):
+                t.text = pegada.sub("", t.text)
+                cambios += 1
+
+        # Forma 2: runs sueltos antes de un MERGEFIELD de cédula.
+        for parrafo in root.iter(W + "p"):
+            runs = parrafo.findall(W + "r")
+            for numero, run in enumerate(runs):
+                instruccion = "".join(i.text or "" for i in run.iter(W + "instrText"))
+                if not instruccion:
+                    continue
+                campo = normalizar_campo(instruccion.replace("MERGEFIELD", ""))
+                if campo not in CAMPOS_DE_CEDULA:
+                    continue
+                cambios += Command._borrar_letra_previa(runs[:numero])
+        return cambios
+
+    @staticmethod
+    def _borrar_letra_previa(anteriores):
+        """Borra un «V-» final repartido en los runs que vienen antes.
+
+        Se recorre de atrás para adelante porque Word parte el texto donde
+        quiere: acá la letra y el guion quedaron en dos runs distintos.
+        """
+        textos = [t for r in anteriores for t in r.iter(W + "t")
+                  if t.text is not None]
+        completo = "".join(t.text for t in textos)
+        sobra = re.search(r"[VvEeJjPpGg]\s*[-–]\s*$", completo)
+        if not sobra:
+            return 0
+        cuantos = len(completo) - sobra.start()
+        for t in reversed(textos):
+            if cuantos <= 0:
+                break
+            largo = len(t.text)
+            if largo <= cuantos:
+                t.text = ""
+                cuantos -= largo
+            else:
+                t.text = t.text[:largo - cuantos]
+                cuantos = 0
+        return 1
 
     # -- El bloque de firmas no se puede cortar por la mitad ----------------
     @staticmethod
@@ -202,6 +323,8 @@ class Command(BaseCommand):
             if t.text:
                 anterior = t
         cambios += self._fecha_del_acuerdo(root)
+        cambios += self._cedula_del_empleador(root)
+        cambios += self._una_sola_letra_en_la_cedula(root)
         self._guardar_docx(partes, root, salida)
         return cambios
 
@@ -405,6 +528,8 @@ class Command(BaseCommand):
         cambios += self._separar_domicilio_legal(root)
         cambios += self._fechas_del_corporativo(root)
         cambios += self._no_partir_las_firmas(root)
+        cambios += self._cedula_del_empleador(root)
+        cambios += self._una_sola_letra_en_la_cedula(root)
         self._guardar_docx(partes, root, salida)
         return cambios
 
@@ -434,6 +559,8 @@ class Command(BaseCommand):
                 t.text = texto.replace("V-,", "V-{{CEDULA}},")
                 cambios += 1
 
+        cambios += self._cedula_del_empleador(root)
+        cambios += self._una_sola_letra_en_la_cedula(root)
         self._guardar_docx(partes, root, salida)
         return cambios
 

@@ -213,9 +213,25 @@
 <div class="card">
   <div class="flex entre wrap">
     <h2 style="margin:0">Documentos corporativos</h2>
-    <a class="btn sec chico" href="{% url 'expedientes:trabajador_update' trabajador.pk %}">
-      Completar datos
-    </a>
+    <div class="flex" style="gap:.5rem">
+      {% if hay_pdf %}
+      {% comment %}
+      Pedido de quien usa el sistema: eran siete botones de Imprimir y siete
+      diálogos de impresión por cada persona que entra. Va primero y destacado
+      porque es lo que se hace siempre; los de a uno quedan para la excepción.
+      Abre en otra pestaña: tarda unos segundos en armarse y así la ficha no
+      se queda en blanco mientras espera.
+      {% endcomment %}
+      <a class="btn chico" target="_blank" rel="noopener"
+         href="{% url 'expedientes:documentos_todos' trabajador.pk %}"
+         title="Los junta en un solo PDF, en el orden en que se firman">
+        Imprimir todos
+      </a>
+      {% endif %}
+      <a class="btn sec chico" href="{% url 'expedientes:trabajador_update' trabajador.pk %}">
+        Completar datos
+      </a>
+    </div>
   </div>
   <p class="pequeno mut">
     Se completan solos con los datos de este expediente.

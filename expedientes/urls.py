@@ -19,6 +19,8 @@ urlpatterns = [
          name="renovacion_guardar"),
     path("renovaciones/<int:pk>/renovar/", views.renovacion_renovar,
          name="renovacion_renovar"),
+    path("trabajadores/<int:pk>/documentos/todos/", views.documentos_todos,
+         name="documentos_todos"),
     path("trabajadores/<int:pk>/documentos/subir/", views.documento_subir, name="documento_subir"),
     path("trabajadores/<int:pk>/documentos/comprimir/", views.documento_comprimir,
          name="documento_comprimir"),
