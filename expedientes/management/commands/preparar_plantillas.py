@@ -114,8 +114,69 @@ class Command(BaseCommand):
                 t.text = patron.sub("{{SALARIO_TEXTO}}", t.text)
                 cambios += 1
         cambios += self._separar_domicilio_legal(root)
+        cambios += self._no_partir_las_firmas(root)
         self._guardar_docx(partes, root, salida)
         return cambios
+
+    # -- El bloque de firmas no se puede cortar por la mitad ----------------
+    @staticmethod
+    def _no_partir_las_firmas(root):
+        """Que la cédula no quede en otra página que la raya para firmar.
+
+        Reporte: el contrato salía con una página final que tenía SOLO los dos
+        números de cédula, sueltos en blanco, lejos de los nombres y de las
+        rayas. Word puede cortar una tabla entre dos filas, y la tabla de
+        firmas son exactamente tres: las etiquetas, los nombres y las cédulas.
+        Cuando el texto de las cláusulas llegaba justo al pie de la página, el
+        corte caía entre los nombres y las cédulas.
+
+        No es cosmético: un contrato que se firma es una hoja donde la cédula
+        identifica a quien firma arriba. Separadas, la última página parece un
+        anexo y la firmada parece incompleta.
+
+        Se marca cada fila como indivisible y se le pide a las de arriba que se
+        queden con la de abajo. Si el bloque no entra al pie, pasa entero a la
+        página siguiente, que es lo que se quiere.
+        """
+        cambios = 0
+        for tabla in root.iter(W + "tbl"):
+            texto = "".join(t.text or "" for t in tabla.iter(W + "t"))
+            if "EMPLEADOR" not in texto:
+                continue
+            filas = tabla.findall(W + "tr")
+            for numero, fila in enumerate(filas):
+                cambios += Command._fila_indivisible(fila)
+                # La última no arrastra a nadie: es el final del bloque.
+                if numero < len(filas) - 1:
+                    for parrafo in fila.iter(W + "p"):
+                        cambios += Command._pegado_al_siguiente(parrafo)
+        return cambios
+
+    @staticmethod
+    def _fila_indivisible(fila):
+        """`w:cantSplit`. Va antes de `w:trHeight`: el orden del esquema."""
+        trpr = fila.find(W + "trPr")
+        if trpr is None:
+            trpr = ET.Element(W + "trPr")
+            fila.insert(0, trpr)
+        if trpr.find(W + "cantSplit") is not None:
+            return 0
+        trpr.insert(0, ET.Element(W + "cantSplit"))
+        return 1
+
+    @staticmethod
+    def _pegado_al_siguiente(parrafo):
+        """`w:keepNext`. Va después de `w:pStyle` y antes del resto."""
+        ppr = parrafo.find(W + "pPr")
+        if ppr is None:
+            ppr = ET.Element(W + "pPr")
+            parrafo.insert(0, ppr)
+        if ppr.find(W + "keepNext") is not None:
+            return 0
+        estilo = ppr.find(W + "pStyle")
+        donde = list(ppr).index(estilo) + 1 if estilo is not None else 0
+        ppr.insert(donde, ET.Element(W + "keepNext"))
+        return 1
 
     # -- Acuerdo de confidencialidad: misma ciudad fija que la carta ---------
     def _preparar_confidencialidad(self, origen, salida):
@@ -343,6 +404,7 @@ class Command(BaseCommand):
 
         cambios += self._separar_domicilio_legal(root)
         cambios += self._fechas_del_corporativo(root)
+        cambios += self._no_partir_las_firmas(root)
         self._guardar_docx(partes, root, salida)
         return cambios
 
