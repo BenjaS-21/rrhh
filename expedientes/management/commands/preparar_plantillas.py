@@ -149,6 +149,7 @@ class Command(BaseCommand):
         cambios += self._no_partir_las_firmas(root)
         cambios += self._cedula_del_empleador(root)
         cambios += self._una_sola_letra_en_la_cedula(root)
+        cambios += self._fecha_del_cierre_del_contrato(root)
         self._guardar_docx(partes, root, salida)
         return cambios
 
@@ -409,16 +410,44 @@ class Command(BaseCommand):
                         textos, k, "{{DIA_DE_CULMINACION}}",
                         "{{MES_DE_CULMINACION}}")
 
-            # El segundo anio es el del final del contrato, no el del comienzo.
-            anios = [i for i in parrafo.iter(W + "instrText")
-                     if i.text and "o_de_ingreso" in i.text]
-            if len(anios) == 2:
-                anios[1].text = anios[1].text.replace(
-                    "Año_de_ingreso", "Año_de_culminación").replace(
-                    "año_de_ingreso", "Año_de_culminación")
-                cambios += 1
+            cambios += self._anio_del_cierre(parrafo)
             break
         return cambios
+
+    @staticmethod
+    def _anio_del_cierre(parrafo):
+        """El segundo anio de la clausula Cuarta es el del final, no el del
+        comienzo.
+
+        Los dos anios apuntaban al mismo campo, el de ingreso. Un contrato que
+        empieza en agosto de 2026 y termina en enero de 2027 salia diciendo que
+        concluia el 15 de enero de 2026: cinco meses ANTES de firmarse. Un
+        contrato vencido el dia que se firma no obliga a nada.
+        """
+        anios = [i for i in parrafo.iter(W + "instrText")
+                 if i.text and "o_de_ingreso" in i.text]
+        if len(anios) != 2:
+            # Ya esta arreglado (queda uno solo) o la clausula cambio de forma.
+            return 0
+        anios[1].text = anios[1].text.replace(
+            "Año_de_ingreso", "Año_de_culminación").replace(
+            "año_de_ingreso", "Año_de_culminación")
+        return 1
+
+    def _fecha_del_cierre_del_contrato(self, root):
+        """Lo mismo, en el contrato de trabajo: ahi solo falla el anio.
+
+        Ese Word ya trae el dia y el mes como campos —por eso el arreglo de
+        `_fechas_del_corporativo` no hacia falta aca y no se aplico—, pero el
+        anio del final apuntaba al de ingreso igual que en el otro. El error
+        quedo suelto en este durante todo ese tiempo.
+        """
+        for parrafo in root.iter(W + "p"):
+            entero = "".join(t.text or "" for t in parrafo.iter(W + "t"))
+            if "entrará en vigencia el" not in entero:
+                continue
+            return self._anio_del_cierre(parrafo)
+        return 0
 
     def _fecha_del_acuerdo(self, root):
         """La clausula Primera del acuerdo de confidencialidad, igual.
