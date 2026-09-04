@@ -96,12 +96,9 @@ window.addEventListener("load", function () {
       r.cargosOfrecidos = ops.length;
       r.cargosEnElSelect = cargo.options.length;
       r.unidadPuesta = unidad.options[unidad.selectedIndex].text;
-      // El grupo va en un <span> aparte: dice de que unidad es cada cargo.
-      r.gruposDeLosPrimeros = Array.prototype.slice.call(ops, 1, 4).map(
-        function (e) {
-          var g = e.querySelector(".buscable__grupo");
-          return g ? g.textContent : "";
-        });
+      // La lista la manda ya ordenada el servidor: generales por nombre.
+      r.primerosTextos = Array.prototype.slice.call(ops, 1, 4).map(
+        function (e) { return e.firstChild.textContent.trim(); });
     }
 
     document.title = JSON.stringify(r);
@@ -277,11 +274,11 @@ class LosDesplegablesLargosSeBuscan(TestCase):
         self.assertLess(r["opcionesDelCorto"], 8)
         self.assertFalse(r["cortoTieneBuscador"])
 
-    def test_la_unidad_ordena_los_cargos_pero_no_los_recorta(self):
-        """El script vacía y rellena el select; el buscador tiene que enterarse.
+    def test_la_unidad_no_recorta_los_cargos(self):
+        """El buscador se entera de la lista que manda el servidor.
 
-        Elegir la unidad NO saca cargos de la lista: los 13 siguen ahí, con los
-        de la unidad elegida arriba de todo.
+        Elegir la unidad NO saca cargos de la lista: los 13 generales siguen
+        ahí, porque valen para cualquier tienda.
         """
         r = self.alta()
         self.assertTrue(r["cargoTieneBuscador"])
@@ -289,11 +286,12 @@ class LosDesplegablesLargosSeBuscan(TestCase):
         # 13 cargos + el renglón vacío.
         self.assertEqual(r["cargosOfrecidos"], 14, "elegir la unidad recortó la lista")
 
-    def test_y_los_de_la_unidad_elegida_van_primero(self):
-        """Testigo del de arriba: ofrecer todo sin ordenar no sería una mejora."""
+    def test_y_van_alfabeticos_sin_importar_la_unidad(self):
+        """Los generales van por nombre; la unidad ya no reordena la lista."""
         r = self.alta()
-        self.assertEqual(r["gruposDeLosPrimeros"],
-                         [r["unidadPuesta"]] * 3)
+        self.assertEqual(r["primerosTextos"],
+                         ["MONTACARGUISTA 0", "MONTACARGUISTA 1",
+                          "MONTACARGUISTA 2"])
 
     # --- El filtro de tiendas del listado -------------------------------------
     def test_el_filtro_de_tiendas_tiene_buscador(self):

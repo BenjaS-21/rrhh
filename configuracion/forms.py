@@ -47,12 +47,17 @@ class CargoForm(_BaseForm):
 
     class Meta:
         model = Cargo
-        fields = ["nombre", "departamento", "activo"]
+        fields = ["nombre", "departamento", "es_general", "activo"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["departamento"].queryset = Departamento.objects.filter(activo=True)
         self.fields["departamento"].label = "Unidad organizativa"
+        self.fields["es_general"].label = "General (se ofrece en todas las tiendas)"
+        # Los cargos nuevos nacen generales: salvo que sea un particular de una
+        # unidad a propósito, lo normal es que se ofrezca en todas las tiendas.
+        if not self.instance.pk:
+            self.fields["es_general"].initial = True
 
     def clean_nombre(self):
         # El catálogo real viene todo en mayúsculas: si se carga a mano en

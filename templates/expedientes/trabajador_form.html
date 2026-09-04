@@ -64,79 +64,14 @@ Las secciones las arma `_secciones_expediente` en la vista.
 </form>
 
 {% comment %}
-Están SIEMPRE los 805 cargos, elijas la unidad que elijas.
+El desplegable de cargos muestra los GENERALES: una opción por nombre, no las
+800+ filas con cada nombre repetido por tienda. Si el expediente ya tenía un
+cargo particular de una unidad, ese aparece también —marcado como particular—
+para que editar la ficha no lo borre.
 
-Antes se dejaban solo los de la unidad. El catálogo cuelga cada cargo de una
-unidad, pero eso es de dónde salió el nombre, no una regla: en una tienda
-trabaja gente con cargos que el catálogo tiene cargados bajo otra gerencia
-—mantenimiento, seguridad, sistemas—, y filtrando no había forma de
-registrarla. Además dejaba el campo vacío en las unidades sin cargos, y borraba
-sin aviso el cargo ya elegido al cambiar de unidad.
-
-Lo que sí hace la unidad es ORDENAR: sus cargos suben al principio de la lista,
-bajo un encabezado, y el resto queda abajo. Se ofrece todo y se propone lo
-probable.
+Antes se agrupaban por unidad en el navegador: al ser todos generales ya no
+hace falta. El servidor manda la lista final y no hay nada que reordenar.
 {% endcomment %}
-<script>
-  (function () {
-    var unidad = document.getElementById("id_departamento");
-    var cargo = document.getElementById("id_puesto");
-    if (!unidad || !cargo) { return; }
-
-    // Se guardan porque al reordenar se vacía el <select>: si solo se movieran
-    // los nodos, se perdería el `data-unidad` que dice de dónde es cada uno.
-    var todas = Array.prototype.slice.call(cargo.options).map(function (o) {
-      return { valor: o.value, texto: o.text, unidad: o.dataset.unidad || "" };
-    });
-    var vacia = todas[0];
-
-    function opcion(o) {
-      var e = document.createElement("option");
-      e.value = o.valor;
-      e.text = o.texto;
-      if (o.unidad) { e.dataset.unidad = o.unidad; }
-      return e;
-    }
-
-    function grupo(etiqueta, lista, destino) {
-      if (!lista.length) { return; }
-      var g = document.createElement("optgroup");
-      g.label = etiqueta;
-      lista.forEach(function (o) { g.appendChild(opcion(o)); });
-      destino.appendChild(g);
-    }
-
-    function ordenar() {
-      var elegida = unidad.value;
-      var antes = cargo.value;
-      var nombre = elegida ? unidad.options[unidad.selectedIndex].text : "";
-
-      cargo.innerHTML = "";
-      var primero = opcion(vacia);
-      primero.text = elegida ? "— Elegí el cargo —" : vacia.texto;
-      cargo.appendChild(primero);
-
-      var reales = todas.filter(function (o) { return o.valor; });
-      if (!elegida) {
-        reales.forEach(function (o) { cargo.appendChild(opcion(o)); });
-      } else {
-        var suyos = reales.filter(function (o) { return o.unidad === elegida; });
-        var resto = reales.filter(function (o) { return o.unidad !== elegida; });
-        grupo(nombre, suyos, cargo);
-        grupo(suyos.length ? "Otros cargos" : "Todos los cargos", resto, cargo);
-      }
-
-      // Lo ya elegido se respeta siempre: ahora ninguna opción desaparece.
-      cargo.value = antes;
-      if (cargo.selectedIndex < 0) { cargo.value = vacia.valor; }
-    }
-
-    unidad.addEventListener("change", ordenar);
-    ordenar();
-  })();
-</script>
-
-{# Al escribir la duración se propone la fecha de fin, y al revés. #}
 <script>
   (function () {
     var ingreso = document.getElementById("id_fecha_ingreso");

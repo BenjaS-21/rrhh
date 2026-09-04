@@ -166,6 +166,14 @@ class Cargo(models.Model):
         Departamento, on_delete=models.CASCADE, related_name="cargos",
         verbose_name="unidad organizativa",
     )
+    es_general = models.BooleanField(
+        "general (todas las tiendas)", default=True,
+        help_text="Se ofrece en el desplegable de cargos de cualquier "
+                  "expediente. Se destilda en los cargos particulares de una "
+                  "unidad (los duplicados por tienda), asi el desplegable "
+                  "muestra cada nombre una sola vez. No afecta a los "
+                  "trabajadores que ya lo tienen asignado.",
+    )
     activo = models.BooleanField(default=True)
 
     class Meta:

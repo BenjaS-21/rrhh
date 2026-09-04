@@ -190,6 +190,11 @@ class Command(BaseCommand):
             (norm(c.nombre), norm(c.departamento.nombre)): c
             for c in Cargo.objects.select_related("departamento")
         }
+        # Cualquier fila con ese nombre sirve: se prefiere la general.
+        por_nombre = {}
+        for c in sorted(catalogo.values(),
+                        key=lambda c: (not c.es_general, c.pk)):
+            por_nombre.setdefault(norm(c.nombre), c)
         existentes = set(Trabajador.objects.values_list("documento_identidad", flat=True))
 
         cargados = saltados = 0
@@ -218,10 +223,16 @@ class Command(BaseCommand):
                 nombre_cargo = norm(f[29])
                 cargo = catalogo.get((nombre_cargo, norm(f[28])))
                 if cargo is None:
+                    # Si el nombre ya existe en cualquier unidad, se usa ese:
+                    # crear otra fila con el mismo nombre es justo lo que el
+                    # catálogo general vino a terminar.
+                    cargo = por_nombre.get(nombre_cargo)
+                if cargo is None:
                     cargo = Cargo.objects.create(nombre=nombre_cargo,
                                                  departamento=unidad)
-                    catalogo[(nombre_cargo, norm(f[28]))] = cargo
+                    por_nombre[nombre_cargo] = cargo
                     cargos_creados.add(nombre_cargo)
+                catalogo[(nombre_cargo, norm(f[28]))] = cargo
 
                 nacimiento = fecha_de(f[22], hoy)
                 if isinstance(f[22], (datetime.datetime, datetime.date)) \

@@ -103,13 +103,15 @@ class CatalogoDeCargos(TestCase):
         self.client.force_login(self.admin)
         self.client.post(reverse("configuracion:crear", args=["cargos"]),
                          {"nombre": "CONTRALOR", "departamento": vacia.pk,
-                          "activo": "on"})
+                          "es_general": "on", "activo": "on"})
         creado = Cargo.objects.get(nombre="CONTRALOR")
         self.assertEqual(creado.departamento, vacia)
 
+        # Los cargos nuevos nacen generales: se ofrecen en el alta de inmediato.
+        self.assertTrue(creado.es_general)
         cuerpo = self.client.get(
             reverse("expedientes:trabajador_create")).content.decode()
-        self.assertIn('data-unidad="%d"' % vacia.pk, cuerpo)
+        self.assertIn('<option value="%d">CONTRALOR</option>' % creado.pk, cuerpo)
 
     def test_el_nombre_se_guarda_en_mayusculas(self):
         """El catálogo real es todo mayúsculas: en minúscula queda un duplicado

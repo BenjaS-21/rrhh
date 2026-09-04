@@ -77,7 +77,8 @@ CATALOGOS = {
         # Son cientos: sin buscador la página no se puede usar.
         "buscar": ["nombre__icontains", "departamento__nombre__icontains"],
         "columnas": [("Nombre", lambda o: o.nombre),
-                     ("Unidad organizativa", lambda o: str(o.departamento))],
+                     ("Unidad organizativa", lambda o: str(o.departamento)),
+                     ("General", lambda o: _si_no(o.es_general))],
     },
     "zonas": {
         "model": Zona, "form": ZonaForm,

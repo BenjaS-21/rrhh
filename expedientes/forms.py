@@ -9,7 +9,7 @@ from django.db.models import Count, Max, Q
 from django.utils import timezone
 
 from cuentas.models import Cargo, Departamento, Sede, TipoDocumentoIdentidad
-from cuentas.widgets import FechaInput, SelectCargo
+from cuentas.widgets import FechaInput
 from .permisos import trabajadores_visibles, ve_todo_el_pais
 from .models import (
     AsignacionPago, ConceptoPago, DatosContratacion, Documento, Hijo, Moneda,
@@ -19,6 +19,32 @@ from .models import (
 
 _INPUT = "input"
 _SELECT = "select"
+
+
+class CampoCargo(forms.ModelChoiceField):
+    """El cargo en el desplegable del expediente.
+
+    Los generales van con su nombre pelado. Los particulares —el duplicado de
+    una tienda que quedó fuera de los generales— llevan la unidad al lado,
+    para distinguirlos del general con el mismo nombre.
+
+    `repetidos` son los nombres que aparecen más de una vez en lo que se
+    ofrece. Un cargo es único por (nombre, unidad), no por nombre: nada impide
+    que existan dos generales llamados ALMACENISTA en unidades distintas, y
+    desde que quien carga expedientes puede ampliar el catálogo es cuestión de
+    tiempo. Dos opciones con la misma letra son peores que 800: no se elige
+    mal por descuido sino porque no hay nada que mirar, y el cargo equivocado
+    sale impreso en el contrato. Cuando pasa, los dos llevan su unidad.
+    """
+
+    repetidos = frozenset()
+
+    def label_from_instance(self, obj):
+        if not obj.es_general:
+            return f"{obj.nombre} — {obj.departamento.nombre} (particular)"
+        if obj.nombre in self.repetidos:
+            return f"{obj.nombre} — {obj.departamento.nombre}"
+        return obj.nombre
 
 
 def _tiendas_del_usuario(usuario):
@@ -87,7 +113,6 @@ class TrabajadorForm(forms.ModelForm):
         widgets = {
             "fecha_nacimiento": FechaInput(),
             "fecha_ingreso": FechaInput(),
-            "puesto": SelectCargo,
         }
 
     def __init__(self, *args, usuario=None, creando=False, **kwargs):
@@ -116,16 +141,33 @@ class TrabajadorForm(forms.ModelForm):
         # Los expedientes viejos traen la letra pegada dentro del número
         # ("V-30719983"): por eso no es obligatorio.
         self.fields["documento_identidad"].label = "Cédula"
-        self.fields["puesto"].queryset = (
-            Cargo.objects.filter(activo=True, departamento__activo=True)
-            .select_related("departamento")
+        # El desplegable muestra los cargos GENERALES: una opción por nombre,
+        # no los 800+ con cada nombre repetido por tienda. El cargo particular
+        # que ya tenga el expediente se ofrece igual: si no, al abrir la ficha
+        # el campo saldría vacío y guardar lo borraría sin aviso.
+        actual_cargo = getattr(self.instance, "puesto_id", None)
+        self.fields["puesto"] = CampoCargo(
+            queryset=(
+                Cargo.objects.filter(activo=True, departamento__activo=True)
+                .filter(Q(es_general=True) | Q(pk=actual_cargo))
+                .select_related("departamento")
+                .order_by("nombre")
+            ),
+            required=self.fields["puesto"].required,
+            # El campo se llama `puesto` pero en todo el sistema se dice CARGO:
+            # así está en el catálogo, en los contratos y en la lista de
+            # verificación. Al reemplazar el campo se pierde el `verbose_name`
+            # del modelo y Django lo rebautiza «Puesto» solo.
+            label=self.fields["puesto"].label,
+            empty_label="— Elegí el cargo —",
+            help_text="Cargos generales: valen para cualquier tienda. Si el de "
+                      "esta persona es particular de una unidad, aparece igual "
+                      "(marcado como particular) para no perderlo.",
         )
-        self.fields["puesto"].empty_label = "— Elegí primero la unidad —"
-        # Decía "Se elige de los cargos de la unidad organizativa", que dejó de
-        # ser cierto: están todos siempre. La unidad solo los ordena.
-        self.fields["puesto"].help_text = (
-            "Están todos los cargos. Al elegir la unidad, los de esa unidad "
-            "suben al principio de la lista."
+        self.fields["puesto"].repetidos = frozenset(
+            self.fields["puesto"].queryset.values("nombre")
+            .annotate(cuantos=Count("pk")).filter(cuantos__gt=1)
+            .values_list("nombre", flat=True)
         )
         for campo in self.fields.values():
             css = _SELECT if isinstance(campo.widget, forms.Select) else _INPUT

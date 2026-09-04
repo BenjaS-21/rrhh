@@ -121,7 +121,7 @@ class SeedDamasco(TestCase):
 
 
 class CargoEnElExpediente(BasePagos):
-    """El cargo se elige del catálogo y tiene que ser de la unidad indicada."""
+    """El cargo se elige del catálogo: generales, una opción por nombre."""
 
     @classmethod
     def setUpTestData(cls):
@@ -147,12 +147,14 @@ class CargoEnElExpediente(BasePagos):
                               forms.ModelChoiceField)
         self.assertIn("CAJERA", r.content.decode())
 
-    def test_cada_opcion_dice_a_que_unidad_pertenece(self):
-        """El data-unidad es lo que usa el filtrado del formulario."""
+    def test_los_generales_se_ofrecen_una_vez_por_nombre(self):
+        """Un duplicado particular por unidad ya no se ofrece: solo el general."""
+        Cargo.objects.create(nombre="CHOFER", departamento=self.unidad,
+                             es_general=False)
         self.client.login(username="admin_nac", password=CLAVE)
         cuerpo = self.client.get(
             reverse("expedientes:trabajador_create")).content.decode()
-        self.assertIn('data-unidad="%s"' % self.unidad.pk, cuerpo)
+        self.assertEqual(cuerpo.count(">CHOFER</option>"), 1)
 
     def test_un_cargo_de_otra_unidad_se_acepta(self):
         """El catálogo cuelga cada cargo de una unidad, pero eso no es una regla.

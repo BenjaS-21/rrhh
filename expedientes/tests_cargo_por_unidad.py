@@ -1,100 +1,41 @@
-"""El desplegable de Cargo ofrece SIEMPRE todos los cargos.
+"""El desplegable de Cargo ofrece los generales: una opción por nombre.
 
-Antes se dejaban solo los de la unidad organizativa elegida. La regla parecía
-razonable y estaba mal: el catálogo cuelga cada cargo de una unidad, pero eso
-es de dónde salió el nombre, no dónde puede usarse. En una tienda trabaja gente
-con cargos que el catálogo tiene bajo otra gerencia —mantenimiento, seguridad,
-sistemas— y filtrando no había forma de registrarla.
+Antes ofrecía SIEMPRE todos los cargos: 800+ opciones con el mismo nombre
+repetido por tienda (ALMACENISTA aparecía 64 veces). Desde que los cargos
+tienen `es_general`, el desplegable muestra una fila por nombre —las generales
+valen para cualquier tienda— y los duplicados por tienda quedan como
+particulares, fuera de la oferta.
 
-Además el filtro traía dos daños propios: dejaba el campo vacío en las unidades
-sin cargos, y al cambiar de unidad borraba sin aviso el cargo ya elegido.
+La excepción que importa: el cargo particular que YA tiene el expediente
+aparece igual —marcado como particular— porque si no, editar la ficha lo
+borraría sin aviso.
 
-Lo que la unidad sí hace es ORDENAR: sus cargos suben al principio. Se ofrece
-todo y se propone lo probable.
-
-Se maneja el formulario en un Chrome de verdad porque esto pasa en el navegador.
+Antes de esta versión esto se probaba en un Chrome de verdad porque la lista
+la reordenaba un script del navegador; al quedar la lista final en el servidor
+no hace falta más que mirar el HTML.
 """
 
-import json
 import re
-import shutil
-import subprocess
-import tempfile
-import unittest
-from pathlib import Path
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 
 from cuentas.models import Cargo, Departamento, Sede, Zona
 from expedientes.models import Trabajador
-from expedientes.tests_escaner_imagen import CHROME
 
 Usuario = get_user_model()
 CLAVE = "Clave-De-Prueba-123"
 
-# 5 en la tienda + 1 de otra gerencia + 0 en la unidad vacía.
-TOTAL = 6
 
-GUION = """
-<script>
-window.addEventListener("load", function () {
-  setTimeout(function () {
-    var unidad = document.getElementById("id_departamento");
-    var cargo = document.getElementById("id_puesto");
-
-    function porNombre(select, texto) {
-      for (var i = 0; i < select.options.length; i++) {
-        if (select.options[i].text === texto) { return select.options[i].value; }
-      }
-      return null;
-    }
-
-    function poner(select, texto) {
-      select.value = porNombre(select, texto);
-      select.dispatchEvent(new Event("change", {bubbles: true}));
-    }
-
-    function mirar() {
-      var reales = Array.prototype.filter.call(
-        cargo.options, function (o) { return o.value; });
-      return {
-        vacio: cargo.options.length ? cargo.options[0].text : null,
-        ofrecidos: reales.length,
-        // Los tres primeros, con el encabezado del grupo al que pertenecen.
-        primeros: reales.slice(0, 3).map(function (o) {
-          var g = o.parentNode && o.parentNode.tagName === "OPTGROUP"
-            ? o.parentNode.label : "";
-          return o.text + " | " + g;
-        }),
-        elegido: cargo.value ? cargo.options[cargo.selectedIndex].text : ""
-      };
-    }
-
-    var r = {};
-    r.alPrincipio = mirar();
-
-    poner(unidad, "TIENDA SAN CRISTOBAL");
-    r.conUnidadQueTiene = mirar();
-
-    poner(unidad, "UNIDAD VACIA");
-    r.conUnidadSinCargos = mirar();
-
-    // Al reves: primero el cargo, despues una unidad que no lo tiene.
-    unidad.value = "";
-    unidad.dispatchEvent(new Event("change", {bubbles: true}));
-    poner(cargo, "AUXILIAR DE MANTENIMIENTO");
-    r.cargoElegidoSinUnidad = mirar();
-    poner(unidad, "TIENDA SAN CRISTOBAL");
-    r.despuesDeCambiarLaUnidad = mirar();
-
-    document.title = JSON.stringify(r);
-  }, 700);
-});
-</script>
-</body>"""
+def _opciones(cuerpo, id_select="id_puesto"):
+    """(value, texto) de cada opción de un `<select>` del HTML."""
+    trozo = re.search(
+        r'<select[^>]*id="%s".*?</select>' % re.escape(id_select), cuerpo, re.S)
+    if not trozo:
+        return []
+    return re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>',
+                      trozo.group(0))
 
 
 class _ConCatalogo(TestCase):
@@ -105,159 +46,150 @@ class _ConCatalogo(TestCase):
         cls.sede = Sede.objects.create(nombre="SAN CRISTOBAL", zona=zona)
 
         cls.tienda = Departamento.objects.create(nombre="TIENDA SAN CRISTOBAL")
-        for nombre in ("ALMACENISTA", "ASESOR DE VENTAS", "CAJERO",
-                       "GERENTE DE TIENDA", "SUBGERENTE DE TIENDA"):
-            Cargo.objects.create(nombre=nombre, departamento=cls.tienda)
-
-        # Un cargo real que el catálogo cuelga de otra gerencia.
-        otra = Departamento.objects.create(nombre="GERENCIA DE SERVICIOS")
-        cls.ajeno = Cargo.objects.create(nombre="AUXILIAR DE MANTENIMIENTO",
-                                         departamento=otra)
-
-        cls.vacia = Departamento.objects.create(nombre="UNIDAD VACIA")
+        cls.otra = Departamento.objects.create(nombre="TIENDA BUENAVENTURA")
+        # El mismo nombre en dos unidades: uno general y otro particular.
+        cls.general = Cargo.objects.create(
+            nombre="ALMACENISTA", departamento=cls.tienda, es_general=True)
+        cls.particular = Cargo.objects.create(
+            nombre="ALMACENISTA", departamento=cls.otra, es_general=False)
+        cls.otro_general = Cargo.objects.create(
+            nombre="CAJERO", departamento=cls.tienda, es_general=True)
 
         cls.admin = Usuario.objects.create_user(username="adm", password=CLAVE)
         cls.admin.rol = Usuario.Rol.ADMIN
         cls.admin.save()
 
-
-@unittest.skipUnless(CHROME, "Esta maquina no tiene Chrome.")
-class EnLaPantallaSalenTodos(_ConCatalogo):
-
-    def _manejar(self):
-        base = Path(settings.BASE_DIR)
-        css = (base / "static" / "css" / "estilos.css").as_uri()
+    def cuerpo(self, url):
         self.client.force_login(self.admin)
-        with override_settings(ALLOWED_HOSTS=["testserver"]):
-            html = self.client.get(
-                reverse("expedientes:trabajador_create")).content.decode()
-        html = re.sub(r'href="/static/css/estilos\.css[^"]*"', f'href="{css}"', html)
-        html = re.sub(r'<script src="/static/js/htmx[^"]*"[^>]*></script>', "", html)
-        html = re.sub(
-            r'src="/static/js/([\w-]+)\.js[^"]*"',
-            lambda m: 'src="%s"' % (base / "static" / "js" / f"{m.group(1)}.js").as_uri(),
-            html)
-        html = html.replace("</body>", GUION)
-
-        carpeta = tempfile.mkdtemp(prefix="gde-cargo-")
-        try:
-            pagina = Path(carpeta) / "p.html"
-            pagina.write_text(html, encoding="utf-8")
-            salida = subprocess.run(
-                [CHROME, "--headless=new", "--disable-gpu", "--no-sandbox",
-                 "--allow-file-access-from-files", "--virtual-time-budget=9000",
-                 "--window-size=1000,900", "--dump-dom", pagina.as_uri()],
-                capture_output=True, timeout=180,
-                encoding="utf-8", errors="replace").stdout
-            titulo = re.search(r"<title>(.*?)</title>", salida, re.S)
-            if not titulo:
-                raise AssertionError("Chrome no devolvio el resultado")
-            return json.loads(titulo.group(1))
-        finally:
-            shutil.rmtree(carpeta, ignore_errors=True)
-
-    def medida(self):
-        if "_cache" not in EnLaPantallaSalenTodos.__dict__:
-            EnLaPantallaSalenTodos._cache = self._manejar()
-        return EnLaPantallaSalenTodos._cache
-
-    # --- Lo que pidió el reporte -----------------------------------------------
-    def test_con_una_unidad_elegida_siguen_estando_todos(self):
-        """El pedido, textual: «en todas las unidades deben salir todos»."""
-        self.assertEqual(self.medida()["conUnidadQueTiene"]["ofrecidos"], TOTAL)
-
-    def test_incluso_en_una_unidad_que_no_tiene_ninguno_propio(self):
-        """Era el peor caso: el campo quedaba vacío y no se podía seguir."""
-        self.assertEqual(self.medida()["conUnidadSinCargos"]["ofrecidos"], TOTAL)
-
-    def test_sin_elegir_unidad_tambien(self):
-        self.assertEqual(self.medida()["alPrincipio"]["ofrecidos"], TOTAL)
-
-    # --- Pero ordenados --------------------------------------------------------
-    def test_los_de_la_unidad_elegida_van_primero_y_dicen_de_donde_son(self):
-        """Ofrecer 805 sin orden sería cambiar un problema por otro."""
-        primeros = self.medida()["conUnidadQueTiene"]["primeros"]
-        for entrada in primeros:
-            self.assertTrue(entrada.endswith("| TIENDA SAN CRISTOBAL"), primeros)
-
-    def test_los_demas_quedan_abajo_bajo_su_propio_encabezado(self):
-        """Testigo: si el encabezado fuera el mismo, no estaría ordenando nada."""
-        m = self.medida()["conUnidadSinCargos"]["primeros"]
-        for entrada in m:
-            self.assertTrue(entrada.endswith("| Todos los cargos"), m)
-
-    def test_sin_unidad_elegida_no_se_agrupa(self):
-        """No hay con qué agrupar todavía: un encabezado ahí sería inventado."""
-        for entrada in self.medida()["alPrincipio"]["primeros"]:
-            self.assertTrue(entrada.endswith("| "), entrada)
-
-    # --- Y ya no se pierde nada -------------------------------------------------
-    def test_cambiar_de_unidad_ya_no_borra_el_cargo_elegido(self):
-        """Desaparecía solo y sin aviso: eso es lo que parecía un error."""
-        m = self.medida()
-        self.assertEqual(m["cargoElegidoSinUnidad"]["elegido"],
-                         "AUXILIAR DE MANTENIMIENTO")
-        self.assertEqual(m["despuesDeCambiarLaUnidad"]["elegido"],
-                         "AUXILIAR DE MANTENIMIENTO",
-                         "cambiar la unidad se llevo puesto el cargo elegido")
-
-    def test_el_renglon_vacio_deja_de_pedir_la_unidad_una_vez_elegida(self):
-        """Pedía «Elegí primero la unidad» con la unidad ya puesta."""
-        m = self.medida()
-        self.assertIn("Elegí primero la unidad", m["alPrincipio"]["vacio"])
-        self.assertIn("Elegí el cargo", m["conUnidadQueTiene"]["vacio"])
+        return self.client.get(url).content.decode()
 
 
-class YAlGuardarloTambien(_ConCatalogo):
-    """La pantalla y el servidor tienen que decir lo mismo.
+class LaOfertaEsGeneral(_ConCatalogo):
 
-    Si la lista ofreciera todo y el servidor rechazara lo que no coincide, la
-    persona elegiría una opción que el sistema mismo le propuso para que
-    después le dijeran que no.
+    def test_una_opcion_por_nombre(self):
+        textos = [t for _, t in _opciones(
+            self.cuerpo(reverse("expedientes:trabajador_create")))]
+        self.assertEqual(textos.count("ALMACENISTA"), 1)
+        self.assertEqual(textos.count("CAJERO"), 1)
+
+    def test_los_particulares_no_se_ofrecen(self):
+        valores = [v for v, _ in _opciones(
+            self.cuerpo(reverse("expedientes:trabajador_create")))]
+        self.assertNotIn(str(self.particular.pk), valores)
+        self.assertIn(str(self.general.pk), valores)
+
+    def test_el_inactivo_tampoco(self):
+        Cargo.objects.filter(pk=self.general.pk).update(activo=False)
+        valores = [v for v, _ in _opciones(
+            self.cuerpo(reverse("expedientes:trabajador_create")))]
+        self.assertNotIn(str(self.general.pk), valores)
+
+    def test_los_cargos_nuevos_nacen_generales(self):
+        nuevo = Cargo.objects.create(nombre="EMPACADOR", departamento=self.tienda)
+        self.assertTrue(nuevo.es_general)
+
+
+class ElCargoParticularDelExpedienteSeConserva(_ConCatalogo):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.trabajador = Trabajador.objects.create(
+            documento_identidad="V-1", nombres="Ana", apellidos="Alvarez",
+            sede=cls.sede, departamento=cls.otra, puesto=cls.particular)
+
+    def test_al_editar_aparece_marcado_como_particular(self):
+        cuerpo = self.cuerpo(
+            reverse("expedientes:trabajador_update", args=[self.trabajador.pk]))
+        opciones = _opciones(cuerpo)
+        valores = [v for v, _ in opciones]
+        self.assertIn(str(self.particular.pk), valores)
+        textos = dict(opciones)
+        self.assertIn("particular", textos[str(self.particular.pk)])
+
+    def test_y_queda_seleccionado(self):
+        cuerpo = self.cuerpo(
+            reverse("expedientes:trabajador_update", args=[self.trabajador.pk]))
+        trozo = re.search(
+            r'<option value="%d"[^>]*selected' % self.particular.pk, cuerpo)
+        self.assertIsNotNone(trozo)
+
+    def test_al_guardar_con_un_general_se_asigna(self):
+        self.client.force_login(self.admin)
+        self.client.post(
+            reverse("expedientes:trabajador_update", args=[self.trabajador.pk]),
+            {"documento_identidad": "V-1", "nombres": "Ana",
+             "apellidos": "Alvarez", "sede": self.sede.pk, "estado": "ACTIVO",
+             "puesto": self.general.pk})
+        self.trabajador.refresh_from_db()
+        self.assertEqual(self.trabajador.puesto, self.general)
+
+
+class DosGeneralesConElMismoNombreSeDistinguen(_ConCatalogo):
+    """El catálogo es único por (nombre, unidad), no por nombre.
+
+    O sea que nada impide dos generales llamados ALMACENISTA en unidades
+    distintas. La migración deja uno solo por nombre, pero eso vale para el
+    día que corre: desde que quien carga expedientes puede ampliar el catálogo
+    —y el formulario de Cargo estrena los nuevos como generales— alguien va a
+    crear el ALMACENISTA de una unidad que no lo tenía.
+
+    Dos opciones con la misma letra son peores que las 800 de antes. Con 800
+    se elegía mal por cansancio; con dos idénticas no hay nada que mirar, y el
+    cargo que sale impreso en el contrato es el de otra unidad. Ya llegó un
+    reporte por un cargo equivocado en un contrato: no conviene reestrenarlo.
     """
 
-    def alta(self, **cambios):
-        datos = {"documento_identidad": "V-30719983", "nombres": "Benjamin",
-                 "apellidos": "Velazco", "sede": self.sede.pk}
-        datos.update(cambios)
-        self.client.force_login(self.admin)
-        return self.client.post(reverse("expedientes:trabajador_create"), datos)
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.gemelo = Cargo.objects.create(
+            nombre="CAJERO", departamento=cls.otra, es_general=True)
 
-    def test_un_cargo_de_otra_gerencia_en_una_tienda_se_guarda(self):
-        r = self.alta(departamento=self.tienda.pk, puesto=self.ajeno.pk)
-        self.assertEqual(r.status_code, 302)
-        t = Trabajador.objects.get()
-        self.assertEqual(t.puesto, self.ajeno)
-        self.assertEqual(t.departamento, self.tienda)
+    def textos(self):
+        return [t for _, t in _opciones(
+            self.cuerpo(reverse("expedientes:trabajador_create")))]
 
-    def test_en_una_unidad_sin_cargos_propios_tambien(self):
-        r = self.alta(departamento=self.vacia.pk, puesto=self.ajeno.pk)
-        self.assertEqual(r.status_code, 302)
-        self.assertEqual(Trabajador.objects.get().departamento, self.vacia)
+    def test_los_dos_llevan_su_unidad(self):
+        textos = self.textos()
+        for unidad in (self.tienda.nombre, self.otra.nombre):
+            with self.subTest(unidad=unidad):
+                self.assertIn(f"CAJERO — {unidad}", textos)
 
-    def test_sin_unidad_el_expediente_queda_sin_unidad(self):
-        """El caso que ensució un expediente real.
+    def test_no_queda_ninguno_con_el_nombre_pelado(self):
+        """Lo que se elige a ciegas: dos renglones que dicen lo mismo."""
+        self.assertNotIn("CAJERO", self.textos())
 
-        Antes se completaba sola con la unidad del cargo. Como el mismo nombre
-        está repetido en decenas de unidades, a alguien de San Cristóbal le
-        quedó «CENDIS GUATIRE I» —una tienda de otro estado— sin que nadie la
-        eligiera. En blanco es lo correcto: el semáforo de la nómina lo marca
-        incompleto y una persona lo completa.
-        """
-        self.alta(puesto=self.ajeno.pk)
-        self.assertIsNone(Trabajador.objects.get().departamento)
+    def test_el_que_no_se_repite_sigue_saliendo_limpio(self):
+        """Testigo: si la unidad se agregara siempre, el desplegable volvería
+        a leerse como la lista larga que este cambio vino a arreglar."""
+        self.assertIn("ALMACENISTA", self.textos())
 
-    def test_pero_el_cargo_si_queda_puesto(self):
-        """Testigo: no completar la unidad no puede costar el dato que sí se eligió."""
-        self.alta(puesto=self.ajeno.pk)
-        self.assertEqual(Trabajador.objects.get().puesto, self.ajeno)
+    def test_el_particular_se_sigue_marcando_como_particular(self):
+        """Testigo de que no se pisó lo que ya andaba."""
+        trabajador = Trabajador.objects.create(
+            documento_identidad="11222333", nombres="ANA", apellidos="PEREZ",
+            sede=self.sede, departamento=self.otra, puesto=self.particular)
+        textos = [t for _, t in _opciones(self.cuerpo(
+            reverse("expedientes:trabajador_update", args=[trabajador.pk])))]
+        self.assertIn(f"ALMACENISTA — {self.otra.nombre} (particular)", textos)
 
-    def test_la_unidad_que_se_elige_es_la_que_queda(self):
-        """Testigo del testigo: cuando se elige, se respeta tal cual."""
-        self.alta(departamento=self.tienda.pk, puesto=self.ajeno.pk)
-        self.assertEqual(Trabajador.objects.get().departamento, self.tienda)
 
-    def test_el_cargo_queda_en_la_ficha(self):
-        self.alta(departamento=self.tienda.pk, puesto=self.ajeno.pk)
-        self.assertEqual(Trabajador.objects.get().cargo_nombre,
-                         "AUXILIAR DE MANTENIMIENTO")
+class ElCampoSigueDiciendoCargo(_ConCatalogo):
+    """En el modelo se llama `puesto`; en la pantalla dice CARGO.
+
+    Así está en el catálogo de Configuración, en los contratos, en la lista de
+    verificación del expediente y en los reportes que manda la gente. El campo
+    del formulario se reemplaza entero para poder filtrar los generales, y al
+    reemplazarlo se pierde el `verbose_name` del modelo: Django lo rebautiza
+    «Puesto» solo, sin avisar.
+    """
+
+    def test_la_etiqueta_dice_cargo(self):
+        from expedientes.forms import TrabajadorForm
+
+        self.assertEqual(str(TrabajadorForm()["puesto"].label), "Cargo")
+
+    def test_y_sale_asi_en_la_pantalla(self):
+        cuerpo = self.cuerpo(reverse("expedientes:trabajador_create"))
+        self.assertIn('<label for="id_puesto">Cargo</label>', cuerpo)
