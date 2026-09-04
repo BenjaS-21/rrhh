@@ -121,7 +121,15 @@ class Command(BaseCommand):
                 ET.register_namespace(prefijo, uri)
             except ValueError:
                 pass
-        return partes, ET.fromstring(xml)
+        root = ET.fromstring(xml)
+        # Se acepta el control de cambios ACA y no en cada preparador, que es
+        # como se olvida: el ano del cierre del contrato estuvo mal un mes por
+        # haberse arreglado en un Word y no en el otro. Cualquier plantilla que
+        # llegue con marcas queda limpia sin que nadie tenga que acordarse.
+        # En una sin marcas no hace nada.
+        Command._aceptar_los_cambios(root)
+        Command._unir_parrafos_con_marca_borrada(root)
+        return partes, root
 
     @staticmethod
     def _guardar_docx(partes, root, salida):
@@ -350,6 +358,96 @@ class Command(BaseCommand):
         cambios += self._cedula_del_empleador(root)
         cambios += self._una_sola_letra_en_la_cedula(root)
         self._guardar_docx(partes, root, salida)
+        return cambios
+
+    # -- Control de cambios sin aceptar --------------------------------------
+    # Las propiedades "de antes" de un cambio de formato: Word las guarda para
+    # poder rechazarlo. Aceptado el cambio, no significan nada.
+    FORMATO_ANTERIOR = tuple(
+        W + n for n in ("rPrChange", "pPrChange", "tblPrChange", "trPrChange",
+                        "tcPrChange", "sectPrChange", "tblGridChange"))
+
+    @staticmethod
+    def _aceptar_los_cambios(nodo):
+        """Acepta el control de cambios, como el boton de Word.
+
+        El acuerdo de confidencialidad llego con el control de cambios PUESTO:
+        28 inserciones, 6 borrados y 25 cambios de formato de quien redacto la
+        version nueva. El documento que sale del sistema los arrastraba, asi
+        que quien lo abre ve los globos al margen -"Con formato: Fuente: Sin
+        Negrita"- y lo firma con las marcas encima.
+
+        No cambia lo que dice el acuerdo: Word ya mostraba el texto aceptado, y
+        el sistema tampoco leia lo borrado. Lo que se va es el registro de como
+        se llego a ese texto, que en un papel que se firma no pinta nada y
+        ademas deja a la vista quien lo redacto y que decia la version vieja.
+
+        Se hace sobre el XML y no abriendo Word, porque `preparar_plantillas`
+        corre en cualquier maquina, tenga Word o no.
+
+        Aceptar es, en concreto:
+
+        * lo insertado (`w:ins`, `w:moveTo`) se queda, sin el envoltorio;
+        * lo borrado (`w:del`, `w:moveFrom`) se va con todo lo de adentro;
+        * el formato viejo se descarta.
+
+        Caso aparte: un `w:del` dentro del `w:rPr` de un `w:pPr` no es texto
+        borrado sino la MARCA DE PARRAFO, y significa que ese parrafo se une
+        con el siguiente. Eso lo resuelve `_unir_parrafos_con_marca_borrada`.
+        """
+        cambios = 0
+        for hijo in list(nodo):
+            if hijo.tag in (W + "del", W + "moveFrom"):
+                if nodo.tag == W + "rPr":
+                    continue        # marca de parrafo: la trata el otro paso
+                nodo.remove(hijo)
+                cambios += 1
+                continue
+            cambios += Command._aceptar_los_cambios(hijo)
+            if hijo.tag in (W + "ins", W + "moveTo"):
+                donde = list(nodo).index(hijo)
+                nodo.remove(hijo)
+                for corrido, dentro in enumerate(list(hijo)):
+                    nodo.insert(donde + corrido, dentro)
+                cambios += 1
+            elif hijo.tag in Command.FORMATO_ANTERIOR:
+                nodo.remove(hijo)
+                cambios += 1
+        return cambios
+
+    @staticmethod
+    def _unir_parrafos_con_marca_borrada(root):
+        """Un parrafo al que le borraron la marca se une con el siguiente.
+
+        Es lo que hace Word al aceptar: la marca de parrafo es lo que separa un
+        parrafo del otro, y sin ella son uno solo. En el acuerdo pasa una vez,
+        en la linea de firma; sin esto quedaria un renglon en blanco de mas
+        justo arriba de donde se firma.
+
+        El parrafo que sobrevive es el SEGUNDO, con su formato: su marca es la
+        que quedo. Lo del primero se le mete adelante.
+        """
+        cambios = 0
+        for padre in list(root.iter()):
+            i = 0
+            while i < len(padre) - 1:
+                parrafo, siguiente = padre[i], padre[i + 1]
+                if parrafo.tag != W + "p" or siguiente.tag != W + "p":
+                    i += 1
+                    continue
+                ppr = parrafo.find(W + "pPr")
+                rpr = ppr.find(W + "rPr") if ppr is not None else None
+                marca = rpr.find(W + "del") if rpr is not None else None
+                if marca is None:
+                    i += 1
+                    continue
+                contenido = [n for n in parrafo if n.tag != W + "pPr"]
+                donde = 1 if siguiente.find(W + "pPr") is not None else 0
+                for corrido, dentro in enumerate(contenido):
+                    siguiente.insert(donde + corrido, dentro)
+                padre.remove(parrafo)
+                cambios += 1
+                # `i` no avanza: el que estaba en i+1 quedo en i.
         return cambios
 
     # -- Fechas que quedaron escritas a mano en los Word ---------------------
