@@ -155,6 +155,7 @@ class Command(BaseCommand):
                 cambios += 1
         cambios += self._separar_domicilio_legal(root)
         cambios += self._no_partir_las_firmas(root)
+        cambios += self._sin_hueco_antes_de_las_firmas(root)
         cambios += self._cedula_del_empleador(root)
         cambios += self._una_sola_letra_en_la_cedula(root)
         cambios += self._fecha_del_cierre_del_contrato(root)
@@ -272,6 +273,64 @@ class Command(BaseCommand):
         return 1
 
     # -- El bloque de firmas no se puede cortar por la mitad ----------------
+    # Renglones en blanco que se dejan antes de las firmas: para separar, no
+    # para empujar. El numero salio de medir, no de elegir (ver abajo).
+    RENGLONES_ANTES_DE_FIRMAR = 1
+
+    @staticmethod
+    def _sin_hueco_antes_de_las_firmas(root):
+        """Recorta los renglones en blanco de antes del bloque de firmas.
+
+        Reporte, con el PDF de los siete documentos abierto en la hoja 14 de
+        15: la hoja anterior terminaba a media pagina y las firmas quedaban
+        solas en la siguiente. «No puede quedar esto aparte».
+
+        Viene de un arreglo anterior. El bloque de firmas no se puede partir
+        -antes salia una hoja con dos numeros de cedula sueltos-, asi que
+        cuando no entra entero se va todo a la hoja que sigue. Con seis
+        renglones en blanco empujandolo desde arriba, «no entra» pasaba seguido.
+
+        Los renglones estaban para separar, no para empujar. Cuantos dejar salio
+        de medir, convirtiendo con Word los dos contratos con ocho largos de
+        direccion, que es lo que mueve el corte de pagina. Hasta donde aguanta
+        cada opcion antes de que el contrato corporativo vuelva a dejar las
+        firmas solas:
+
+            dejando 2 renglones -> aguanta hasta 260 caracteres de direccion
+            dejando 1 renglon   -> aguanta hasta 470
+            dejando 0           -> aguanta mas de 560
+
+        Queda en 1: las direcciones reales andan entre 60 y 100 caracteres, y
+        pegar las firmas contra el ultimo renglon de texto tampoco esta bien en
+        un papel que se firma. Con una direccion larguisima -de 500 caracteres
+        para arriba- puede volver a pasar, y ahi no hay arreglo: un bloque que
+        no se puede partir y no entra en lo que queda de hoja se va entero.
+
+        Se recorta a un numero fijo y no se quita una cantidad, para que los dos
+        contratos queden con la misma separacion y para poder correrlo de nuevo
+        sin que siga comiendo renglones.
+        """
+        cuerpo = root.find(W + "body")
+        if cuerpo is None:
+            return 0
+        hijos = list(cuerpo)
+        donde = next((i for i, n in enumerate(hijos)
+                      if n.tag == W + "tbl" and "EMPLEADOR" in "".join(
+                          t.text or "" for t in n.iter(W + "t"))), None)
+        if donde is None:
+            return 0
+        vacios = []
+        i = donde - 1
+        while i >= 0 and hijos[i].tag == W + "p" and not "".join(
+                t.text or "" for t in hijos[i].iter(W + "t")).strip():
+            vacios.append(hijos[i])
+            i -= 1
+        cambios = 0
+        for sobrante in vacios[Command.RENGLONES_ANTES_DE_FIRMAR:]:
+            cuerpo.remove(sobrante)
+            cambios += 1
+        return cambios
+
     @staticmethod
     def _no_partir_las_firmas(root):
         """Que la cédula no quede en otra página que la raya para firmar.
@@ -678,6 +737,7 @@ class Command(BaseCommand):
         cambios += self._separar_domicilio_legal(root)
         cambios += self._fechas_del_corporativo(root)
         cambios += self._no_partir_las_firmas(root)
+        cambios += self._sin_hueco_antes_de_las_firmas(root)
         cambios += self._cedula_del_empleador(root)
         cambios += self._una_sola_letra_en_la_cedula(root)
         self._guardar_docx(partes, root, salida)

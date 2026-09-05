@@ -195,3 +195,122 @@ class EnElPdfDeVerdadCaenEnLaMismaHoja(_ConContrato):
         hoja_nombre, hoja_cedula, _ = self._hojas("contrato")
         self.assertIsNotNone(hoja_nombre)
         self.assertIsNotNone(hoja_cedula)
+
+
+# La última cláusula de los dos contratos: si el bloque de firmas cae en su
+# misma hoja, no quedó aparte.
+ULTIMA_CLAUSULA = "Decima Cuarta"
+
+# Cuántos renglones en blanco pueden quedar antes de las firmas. El número
+# salió de medir con Word, no de elegirlo: está anotado en
+# `_sin_hueco_antes_de_las_firmas`.
+RENGLONES = 1
+
+
+def _vacios_antes_de_las_firmas(clave):
+    """Los párrafos en blanco pegados arriba de la tabla de firmas."""
+    with zipfile.ZipFile(generador.ruta_plantilla(clave)) as z:
+        root = ET.fromstring(z.read("word/document.xml"))
+    cuerpo = root.find(W + "body")
+    hijos = list(cuerpo)
+    donde = next((i for i, n in enumerate(hijos)
+                  if n.tag == W + "tbl" and "EMPLEADOR" in "".join(
+                      t.text or "" for t in n.iter(W + "t"))), None)
+    if donde is None:
+        return None
+    cuantos = 0
+    i = donde - 1
+    while i >= 0 and hijos[i].tag == W + "p" and not "".join(
+            t.text or "" for t in hijos[i].iter(W + "t")).strip():
+        cuantos += 1
+        i -= 1
+    return cuantos
+
+
+@falta_plantillas
+class LasFirmasNoQuedanSolasEnUnaHoja(TestCase):
+    """El otro lado del arreglo de arriba, y su consecuencia.
+
+    Que el bloque no se pueda partir significa que, cuando no entra entero, se
+    va TODO a la hoja siguiente. Con seis renglones en blanco empujándolo desde
+    arriba, «no entra» pasaba seguido: llegó el reporte con el PDF de los siete
+    documentos abierto en la hoja 14 de 15 —la anterior terminaba a media
+    página y las firmas quedaban solas—. «No puede quedar esto aparte».
+
+    Los renglones estaban para separar, no para empujar.
+    """
+
+    def test_no_queda_mas_de_un_renglon_en_blanco(self):
+        for clave in CON_FIRMAS:
+            with self.subTest(documento=clave):
+                self.assertIsNotNone(_vacios_antes_de_las_firmas(clave),
+                                     "no se encontró la tabla de firmas")
+                self.assertLessEqual(_vacios_antes_de_las_firmas(clave), RENGLONES)
+
+    def test_pero_queda_alguno(self):
+        """Testigo: pegar las firmas al último renglón de texto tampoco sirve;
+        es un contrato que se firma, no un formulario apretado."""
+        for clave in CON_FIRMAS:
+            with self.subTest(documento=clave):
+                self.assertGreater(_vacios_antes_de_las_firmas(clave), 0)
+
+    def test_recortar_de_nuevo_no_come_mas_renglones(self):
+        """`preparar_plantillas` corre en cada arranque. Si en vez de recortar
+        a un número fijo quitara una cantidad, cada arranque se comería dos."""
+        from expedientes.management.commands.preparar_plantillas import Command
+
+        for clave in CON_FIRMAS:
+            with zipfile.ZipFile(generador.ruta_plantilla(clave)) as z:
+                root = ET.fromstring(z.read("word/document.xml"))
+            with self.subTest(documento=clave):
+                self.assertEqual(Command._sin_hueco_antes_de_las_firmas(root), 0)
+
+
+@falta_plantillas
+@unittest.skipUnless(conversor.hay_conversor(),
+                     "Esta máquina no tiene Word: no se puede paginar de verdad.")
+class EnElPdfLasFirmasCaenConLaUltimaClausula(_ConContrato):
+    """Medido de verdad, con los mismos largos de dirección que arriba.
+
+    Los largos llegan hasta 470 caracteres, que es hasta donde aguanta el
+    contrato corporativo. Mas arriba vuelve a quedar aparte y no hay arreglo
+    posible: un bloque que no se puede partir y no entra en lo que queda de
+    hoja se va entero a la siguiente. Queda lejos igual — las direcciones
+    reales andan entre 60 y 100 caracteres.
+
+    Los ocho largos con los que se eligió el número están en
+    `_sin_hueco_antes_de_las_firmas`; acá quedan los que fijan el resultado.
+    """
+
+    # Los de arriba mas dos que antes fallaban: el corporativo dejaba las
+    # firmas solas desde los 380.
+    LARGOS_QUE_ENTRAN = (10, 120, 260, 380, 470)
+
+    def _hojas(self, clave):
+        import pymupdf
+
+        crudo, nombre, _ = generador.generar(clave, self.trabajador)
+        salida = conversor.convertir_a_pdf(crudo, nombre)
+        with pymupdf.open(stream=salida, filetype="pdf") as documento:
+            clausula = firma = None
+            for numero, pagina in enumerate(documento, start=1):
+                texto = pagina.get_text()
+                if ULTIMA_CLAUSULA in texto:
+                    clausula = numero
+                if NOMBRE_EMPLEADOR in texto:
+                    firma = numero
+            return clausula, firma, len(documento)
+
+    def test_las_firmas_van_en_la_hoja_de_la_ultima_clausula(self):
+        for largo in self.LARGOS_QUE_ENTRAN:
+            self.datos.direccion = "AV PRINCIPAL " + ("X" * largo)
+            self.datos.save()
+            for clave in CON_FIRMAS:
+                clausula, firma, total = self._hojas(clave)
+                with self.subTest(documento=clave, direccion=largo):
+                    self.assertIsNotNone(clausula, "no salió la última cláusula")
+                    self.assertEqual(
+                        clausula, firma,
+                        f"{clave}: la última cláusula quedó en la hoja "
+                        f"{clausula} y las firmas solas en la {firma} "
+                        f"(de {total})")
