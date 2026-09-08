@@ -196,3 +196,71 @@ class SinFechaDeFinNoSeInventaNada(_ConContrato):
         self.datos.save()
         faltan = generador.campos_incompletos(self.trabajador)
         self.assertIn("Fecha de culminación (datos de contratación)", faltan)
+
+
+@falta_plantillas
+class LaFechaQueFaltaSaleComoRayaParaCompletar(_ConContrato):
+    """Segundo reporte sobre la misma cláusula, con la línea resaltada:
+
+        Cuarta: El presente contrato entrará en vigencia el 9 de junio de 2026
+        y concluirá el  de  de , sin necesidad de aviso previo
+
+    «Acá esto me preocupa». Con razón. Que la fecha salga vacía es correcto —el
+    sistema no puede inventar cuándo termina un contrato— y la ficha ya lo
+    avisa entre los campos incompletos. El problema es cómo se LEE: «el  de  de
+    ,» parece un documento roto, y un contrato que parece roto igual se firma.
+
+    Con la raya se lee como lo que es: un espacio para completar a mano, que es
+    como se resuelve mil veces al día en papel.
+    """
+
+    def test_sale_una_raya_en_lugar_del_hueco(self):
+        for clave in CON_CLAUSULA:
+            _, fin = self.clausula(clave, None)
+            with self.subTest(documento=clave):
+                self.assertIn("____", fin,
+                              f"quedó el hueco invisible: «{fin.strip()}»")
+
+    def test_las_tres_partes_tienen_su_raya(self):
+        """Día, mes y año: si faltara una, se leería «el ____ de  de ____»."""
+        for clave in CON_CLAUSULA:
+            _, fin = self.clausula(clave, None)
+            with self.subTest(documento=clave):
+                self.assertEqual(len(re.findall(r"_{3,}", fin)), 3, fin)
+
+    def test_con_la_fecha_cargada_no_hay_ninguna_raya(self):
+        """Testigo: la raya es para lo que falta, no un adorno fijo."""
+        for clave in CON_CLAUSULA:
+            _, fin = self.clausula(clave, date(2026, 11, 22))
+            with self.subTest(documento=clave):
+                self.assertNotIn("__", fin)
+                self.assertIn("22 de noviembre de 2026", fin)
+
+    def test_la_ficha_sigue_avisando_que_falta(self):
+        """Lo más importante de todo.
+
+        La raya se pone al generar y NO en el contexto del que sale el aviso de
+        campos incompletos. Si se pusiera allá, el campo dejaría de verse vacío,
+        el aviso se apagaría solo y nadie volvería a enterarse de que falta: la
+        raya pasaría de ser una ayuda a ser una forma de esconder el problema.
+        """
+        self.datos.fecha_culminacion = None
+        self.datos.save()
+        self.assertIn("Fecha de culminación (datos de contratación)",
+                      generador.campos_incompletos(self.trabajador))
+
+    def test_la_fecha_de_ingreso_cargada_no_se_toca(self):
+        """Testigo: solo se raya lo que falta."""
+        _, _ = self.clausula("contrato", None)
+        inicio, _ = self.clausula("contrato", None)
+        self.assertIn("3 de agosto de 2026", inicio)
+
+    def test_la_lista_de_verificacion_no_lleva_rayas(self):
+        """Sus casillas y celdas se completan a mano y son chicas: una raya
+        adentro de una celda de un centímetro es ruido, no una indicación."""
+        from expedientes.tests_documentos import texto_pdf
+
+        self.datos.fecha_culminacion = None
+        self.datos.save()
+        datos, _, _ = generador.generar("checklist", self.trabajador)
+        self.assertNotIn("____", texto_pdf(datos))

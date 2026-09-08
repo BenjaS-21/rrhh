@@ -448,12 +448,15 @@ def generar(clave, trabajador):
 
     valores = contexto_documentos(trabajador)
     if ruta.suffix.lower() == ".rtf":
-        datos, faltantes = rellenar_rtf(ruta, valores)
+        datos, faltantes = rellenar_rtf(ruta, _con_rayas(valores))
     elif ruta.suffix.lower() == ".pdf":
+        # La lista de verificación NO lleva rayas: sus casillas se tildan a
+        # mano y el recuadro es chico. Una raya adentro de una celda de 1 cm
+        # es ruido, no una indicación.
         from .formulario_pdf import rellenar_pdf
         datos, faltantes = rellenar_pdf(ruta, valores)
     else:
-        datos, faltantes = rellenar_docx(ruta, valores)
+        datos, faltantes = rellenar_docx(ruta, _con_rayas(valores))
 
     persona = f"{trabajador.apellidos} {trabajador.nombres}".strip()
     seguro = re.sub(r"[^\w\s-]", "", persona).strip().replace(" ", "_") or "trabajador"
@@ -473,6 +476,49 @@ DOMICILIO_LEGAL = "CARACAS"
 
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
          "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+# Una fecha que falta sale como raya para completar a mano, no como un hueco.
+#
+# Reporte, con el contrato corporativo abierto y la línea resaltada: «Cuarta:
+# El presente contrato entrará en vigencia el 9 de junio de 2026 y concluirá
+# el  de  de , sin necesidad de aviso previo». La fecha de culminación de esa
+# persona no está cargada, así que las tres partes salen vacías.
+#
+# Que salgan vacías es correcto —el sistema no puede inventar la fecha de fin
+# de un contrato— y la ficha ya lo avisa entre los campos incompletos. El
+# problema es cómo se LEE: «el  de  de ,» parece un documento roto, y un
+# contrato que parece roto igual se firma. Con la raya se lee como lo que es:
+# un espacio para completar, que es como se resuelve mil veces al día en papel.
+#
+# Los anchos imitan lo que ocuparía el dato: el mes es la más larga porque va
+# escrito («septiembre»).
+RAYAS = {
+    "dia": "____",
+    "mes": "____________",
+    "ano": "______",
+}
+
+
+def _con_rayas(valores):
+    """Copia de los valores con las fechas que faltan como raya para llenar.
+
+    Solo las fechas. Un nombre o una dirección que faltan dejan un hueco en
+    una frase que igual se entiende; una fecha partida en tres campos deja
+    «el  de  de ,», que no se entiende y no se ve.
+
+    No toca `contexto_documentos`: de ahí sale el aviso de campos incompletos
+    de la ficha, y una raya no es un dato cargado. Si se pusiera allá, el
+    aviso se apagaría solo y nadie volvería a enterarse de que falta.
+    """
+    listo = dict(valores)
+    for clave, valor in valores.items():
+        if str(valor or "").strip():
+            continue
+        parte = normalizar_campo(clave).split("_de_")[0]
+        if parte in RAYAS:
+            listo[clave] = RAYAS[parte]
+    return listo
 
 
 def _partes_fecha(fecha, prefijo):
