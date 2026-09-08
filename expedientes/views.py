@@ -290,6 +290,12 @@ def documentos_todos(request, pk):
     descomprimir y abrir siete archivos: no se puede imprimir de una. Un solo
     PDF se abre en el visor del navegador y se imprime en un viaje, y además
     queda en el orden en que se firman.
+
+    Va UN contrato, no los dos. Llegan juntos en `?contrato=`, y de eso vino
+    el reporte: «el contrato se me descargan juntos, necesito un tilde para
+    escoger el contrato corporativo o el general». El de trabajo y el
+    corporativo son excluyentes y cuál corresponde no sale de ningún dato del
+    expediente, así que se elige en la pantalla.
     """
     import pymupdf
 
@@ -306,9 +312,10 @@ def documentos_todos(request, pk):
             "servidor. Mientras tanto se pueden bajar de a uno.")
         return redirect("expedientes:trabajador_detail", pk=trabajador.pk)
 
+    contrato = generador.contrato_elegido(request.GET.get("contrato"))
     juntos = pymupdf.open()
     incluidos, fallaron = [], []
-    for clave, meta in generador.PLANTILLAS.items():
+    for clave, meta in generador.para_imprimir_juntos(contrato):
         try:
             contenido, nombre, _ = generador.generar(clave, trabajador)
             if not nombre.lower().endswith(".pdf"):
@@ -338,10 +345,12 @@ def documentos_todos(request, pk):
     registrar(request, RegistroAuditoria.Accion.DESCARGAR,
               entidad="Documento generado", objeto_id=trabajador.pk,
               descripcion=f"Abrió para imprimir los {len(incluidos)} documentos "
-                          f"de {trabajador}")
+                          f"de {trabajador} con el "
+                          f"{generador.PLANTILLAS[contrato]['titulo'].lower()}")
 
     persona = re.sub(r"[^\w\s-]", "", str(trabajador)).strip().replace(" ", "_")
-    nombre = f"Documentos - {persona or 'trabajador'}.pdf"
+    apodo = "corporativo" if contrato == "corporativo" else "contrato de trabajo"
+    nombre = f"Documentos ({apodo}) - {persona or 'trabajador'}.pdf"
     respuesta = HttpResponse(datos, content_type="application/pdf")
     # Inline: el visor del navegador ya trae el botón de imprimir y no deja
     # un archivo suelto en Descargas por cada expediente.

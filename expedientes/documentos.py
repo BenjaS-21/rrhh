@@ -396,6 +396,41 @@ PLANTILLAS = {
     },
 }
 
+# Los dos contratos son EXCLUYENTES: una persona firma el de trabajo o el
+# corporativo, nunca los dos. En el catálogo están los dos porque cuál
+# corresponde no sale de ningún dato del expediente —depende de la figura con
+# la que entra— y eso lo sabe quien arma la carpeta, no el sistema.
+#
+# Importa para el PDF de «Imprimir todos», que los llevaba a los dos: la
+# carpeta salía con un contrato de más, y uno de los dos es el que no va.
+CONTRATOS_EXCLUYENTES = ("contrato", "corporativo")
+
+# Con cuál sale si no se elige. El de trabajo es el de la mayoría —el
+# corporativo es para el personal de estructura— así que es el que menos veces
+# hay que corregir a mano.
+CONTRATO_POR_DEFECTO = "contrato"
+
+
+def contrato_elegido(clave):
+    """Normaliza la elección que llega de la pantalla.
+
+    Cualquier cosa que no sea uno de los dos cae en el de siempre: un valor
+    raro en la URL no puede dejar la carpeta sin contrato.
+    """
+    return clave if clave in CONTRATOS_EXCLUYENTES else CONTRATO_POR_DEFECTO
+
+
+def para_imprimir_juntos(contrato=None):
+    """Las plantillas que van al PDF junto, con UN solo contrato.
+
+    Devuelve pares (clave, meta) en el orden del catálogo, que es el orden en
+    que se firman.
+    """
+    elegido = contrato_elegido(contrato)
+    afuera = {c for c in CONTRATOS_EXCLUYENTES if c != elegido}
+    return [(clave, meta) for clave, meta in PLANTILLAS.items()
+            if clave not in afuera]
+
 
 def ruta_plantilla(clave):
     from django.conf import settings

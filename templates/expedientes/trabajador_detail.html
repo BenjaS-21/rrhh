@@ -221,12 +221,29 @@
       porque es lo que se hace siempre; los de a uno quedan para la excepción.
       Abre en otra pestaña: tarda unos segundos en armarse y así la ficha no
       se queda en blanco mientras espera.
+
+      El contrato se elige acá porque el PDF llevaba los DOS y una persona
+      firma uno o el otro: la carpeta salía con un contrato de más. Cuál
+      corresponde no sale de ningún dato del expediente —depende de la figura
+      con la que entra— así que lo tilda quien la arma.
       {% endcomment %}
-      <a class="btn chico" target="_blank" rel="noopener"
-         href="{% url 'expedientes:documentos_todos' trabajador.pk %}"
-         title="Los junta en un solo PDF, en el orden en que se firman">
-        Imprimir todos
-      </a>
+      <form method="get" target="_blank"
+            action="{% url 'expedientes:documentos_todos' trabajador.pk %}"
+            class="flex wrap" style="gap:.5rem; align-items:center">
+        <span class="pequeno mut">Contrato:</span>
+        <label class="flex" style="gap:.25rem; align-items:center; cursor:pointer">
+          <input type="radio" name="contrato" value="contrato" checked>
+          <span class="pequeno">de trabajo</span>
+        </label>
+        <label class="flex" style="gap:.25rem; align-items:center; cursor:pointer">
+          <input type="radio" name="contrato" value="corporativo">
+          <span class="pequeno">corporativo</span>
+        </label>
+        <button class="btn chico" type="submit"
+                title="Los junta en un solo PDF, en el orden en que se firman, con el contrato tildado">
+          Imprimir todos
+        </button>
+      </form>
       {% endif %}
       <a class="btn sec chico" href="{% url 'expedientes:trabajador_update' trabajador.pk %}">
         Completar datos
