@@ -12,7 +12,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.http import (FileResponse, Http404, HttpResponse, JsonResponse,
+                         QueryDict)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -1390,6 +1391,22 @@ def renovaciones(request):
           .filter(estado=Trabajador.Estado.ACTIVO)
           .select_related("contratacion", "sede", "sede__zona", "puesto"))
 
+    # Buscar por nombre, apellido o cédula, y acotar por tienda. Se reusa el
+    # formulario del listado para que «buscar» signifique lo mismo en las dos
+    # pantallas y para que el recorte por zona de las tiendas sea el mismo.
+    # Los filtros se aplican de a uno: un valor viejo en la URL no puede
+    # devolver la lista entera (ver `trabajador_list`).
+    filtro = FiltroTrabajadorForm(request.GET or None, usuario=request.user)
+    filtro.is_valid()
+    buscado = getattr(filtro, "cleaned_data", {})
+    if buscado.get("q"):
+        q = buscado["q"]
+        qs = qs.filter(Q(nombres__icontains=q)
+                       | Q(apellidos__icontains=q)
+                       | Q(documento_identidad__icontains=q))
+    if buscado.get("sedes"):
+        qs = qs.filter(sede__in=buscado["sedes"])
+
     if rango == "sin-fecha":
         qs = qs.filter(Q(contratacion__isnull=True)
                        | Q(contratacion__fecha_culminacion__isnull=True))
@@ -1418,8 +1435,35 @@ def renovaciones(request):
                           else None)
 
     return render(request, "expedientes/renovaciones.html", {
-        "filas": filas, "rango": rango,
+        "filas": filas, "rango": rango, "form": filtro,
+        # Viaja en los formularios de Guardar y Renovar: al volver, los
+        # filtros siguen puestos.
+        "volver": request.GET.urlencode(),
     })
+
+
+# Lo unico que se conserva al volver de guardar una fecha. Se rearma desde
+# estas claves y no se reusa el texto recibido: la URL de destino siempre la
+# construye `reverse`, asi que no hay forma de que redirija a otro sitio.
+FILTROS_DE_RENOVACIONES = ("rango", "q", "sedes")
+
+
+def _volver_a_renovaciones(request):
+    """La URL de vuelta a renovaciones, con los filtros que habia puestos.
+
+    Antes volvia solo con `?rango=`: quien habia filtrado por tienda o por
+    nombre lo perdia cada vez que guardaba una fecha. Con una tanda de
+    renovaciones eso es volver a filtrar en cada renglon.
+    """
+    crudo = QueryDict(request.POST.get("volver") or "")
+    limpio = QueryDict(mutable=True)
+    for clave in FILTROS_DE_RENOVACIONES:
+        valores = [v for v in crudo.getlist(clave) if v]
+        if valores:
+            limpio.setlist(clave, valores)
+    if not limpio.get("rango"):
+        limpio["rango"] = request.POST.get("rango") or "90"
+    return f"{reverse('expedientes:renovaciones')}?{limpio.urlencode()}"
 
 
 @login_required
@@ -1439,8 +1483,7 @@ def renovacion_guardar(request, pk):
     antes = datos.fecha_culminacion
     texto = (request.POST.get("fecha_culminacion") or "").strip()
     nueva = parse_date(texto) if texto else None
-    rango = request.POST.get("rango") or "90"
-    destino = f"{reverse('expedientes:renovaciones')}?rango={rango}"
+    destino = _volver_a_renovaciones(request)
     if texto and nueva is None:
         messages.error(request, f"Fecha inválida para {trabajador}: '{texto}'.")
         return redirect(destino)
@@ -1503,5 +1546,4 @@ def renovacion_renovar(request, pk):
         request,
         f"Contrato de {trabajador.nombre_completo} renovado hasta el "
         f"{nueva:%d/%m/%Y}.")
-    rango = request.POST.get("rango") or "90"
-    return redirect(f"{reverse('expedientes:renovaciones')}?rango={rango}")
+    return redirect(_volver_a_renovaciones(request))

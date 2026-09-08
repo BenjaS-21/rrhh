@@ -13,7 +13,12 @@
 </div>
 
 <div class="card">
-  <form method="get" class="flex" style="gap:.6rem; align-items:center">
+  {% comment %}
+  Los tres filtros van en el MISMO formulario: cambiar el rango no puede
+  borrar la búsqueda ni las tiendas marcadas. El rango se envía solo al
+  elegirlo, que es lo que ya hacía; el texto se envía con Enter o con Filtrar.
+  {% endcomment %}
+  <form method="get" class="flex wrap" style="gap:.6rem; align-items:center">
     <label class="pequeno mut mb0" for="rango">Ver</label>
     <select class="select" name="rango" id="rango" onchange="this.form.submit()">
       <option value="vencidos" {% if rango == "vencidos" %}selected{% endif %}>Ya vencidos</option>
@@ -23,6 +28,15 @@
       <option value="todos" {% if rango == "todos" %}selected{% endif %}>Todos los que tienen fecha</option>
       <option value="sin-fecha" {% if rango == "sin-fecha" %}selected{% endif %}>Sin fecha cargada</option>
     </select>
+
+    <label class="pequeno mut mb0" for="{{ form.q.id_for_label }}">Buscar</label>
+    {{ form.q }}
+    {% include "expedientes/_filtro_tiendas.html" %}
+
+    <button class="btn chico" type="submit">Filtrar</button>
+    {% if form.q.value or form.sedes.value %}
+      <a class="btn ghost chico" href="?rango={{ rango }}">Limpiar</a>
+    {% endif %}
     <span class="pequeno mut">{{ filas|length }} trabajador{{ filas|length|pluralize:"es" }}</span>
   </form>
 </div>
@@ -78,7 +92,7 @@
             <form method="post" action="{% url 'expedientes:renovacion_guardar' t.pk %}"
                   class="flex" style="gap:.3rem">
               {% csrf_token %}
-              <input type="hidden" name="rango" value="{{ rango }}">
+              <input type="hidden" name="volver" value="{{ volver }}">
               <input class="input" type="date" name="fecha_culminacion"
                      value="{{ t.fin|date:'Y-m-d'|default:'' }}">
               <button class="btn chico" type="submit">Guardar</button>
@@ -88,7 +102,7 @@
                   style="margin-top:.35rem"
                   onsubmit="return confirm('¿Renovar el contrato de {{ t.nombre_completo|escapejs }} por 90 días más? No crea una ficha nueva: actualiza esta misma.')">
               {% csrf_token %}
-              <input type="hidden" name="rango" value="{{ rango }}">
+              <input type="hidden" name="volver" value="{{ volver }}">
               <button class="btn sec chico" type="submit">↻ Renovar 90 días</button>
             </form>
           </td>
@@ -99,10 +113,18 @@
   </div>
   {% else %}
     <div class="vacio">
-      {% if rango == "sin-fecha" %}
+      {% comment %}
+      Con un filtro puesto, «nadie vence en ese rango» es mentira: puede haber
+      diez y no coincidir ninguno con lo buscado. Decir cuál es el motivo
+      evita cambiar el rango buscando gente que sí está, con otro filtro.
+      {% endcomment %}
+      {% if form.q.value or form.sedes.value %}
+        Nadie coincide con lo que buscaste dentro de este rango.
+        <a href="?rango={{ rango }}">Ver todos los de este rango</a>
+      {% elif rango == "sin-fecha" %}
         Todos los trabajadores activos tienen su fecha de fin de contrato cargada.
       {% elif rango == "vencidos" %}
-        Ningún contrato vencido. 
+        Ningún contrato vencido.
       {% else %}
         Nadie vence en ese rango.
       {% endif %}
