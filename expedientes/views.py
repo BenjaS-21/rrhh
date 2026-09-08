@@ -93,11 +93,19 @@ def trabajador_list(request):
         cant_docs=Count("documentos", filter=Q(documentos__activo=True))
     ).order_by("apellidos", "nombres")
 
-    if form.is_valid():
-        q = form.cleaned_data.get("q")
-        sedes = form.cleaned_data.get("sedes")
-        estado = form.cleaned_data.get("estado")
-        docs = form.cleaned_data.get("docs")
+    # Se aplican los filtros que hayan validado, uno por uno, y no con un
+    # `if form.is_valid()` sobre todos. Con eso, un solo valor viejo en la URL
+    # —una tienda que se desactivó, un estado que ya no existe— dejaba el
+    # formulario entero inválido y devolvía la lista COMPLETA: quien filtró por
+    # estado y tienda veía de golpe a todo el mundo. La nómina ya lo hacía así
+    # (ver `_nomina_filtrada`) y este listado se había quedado atrás.
+    form.is_valid()
+    datos = getattr(form, "cleaned_data", {})
+    if datos:
+        q = datos.get("q")
+        sedes = datos.get("sedes")
+        estado = datos.get("estado")
+        docs = datos.get("docs")
         if q:
             qs = qs.filter(
                 Q(nombres__icontains=q)
@@ -112,10 +120,10 @@ def trabajador_list(request):
             qs = qs.filter(cant_docs=int(docs))
         # `creado_en` es fecha-hora: se compara por día para que «hasta»
         # incluya todo el día elegido.
-        creado_desde = form.cleaned_data.get("creado_desde")
-        creado_hasta = form.cleaned_data.get("creado_hasta")
-        ingreso_desde = form.cleaned_data.get("ingreso_desde")
-        ingreso_hasta = form.cleaned_data.get("ingreso_hasta")
+        creado_desde = datos.get("creado_desde")
+        creado_hasta = datos.get("creado_hasta")
+        ingreso_desde = datos.get("ingreso_desde")
+        ingreso_hasta = datos.get("ingreso_hasta")
         if creado_desde:
             qs = qs.filter(creado_en__date__gte=creado_desde)
         if creado_hasta:

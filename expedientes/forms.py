@@ -66,6 +66,30 @@ def _tiendas_del_usuario(usuario):
     return activas.filter(zona_id=usuario.zona_id)
 
 
+def _tiendas_para_filtrar(usuario):
+    """Las tiendas que se ofrecen en el filtro del listado.
+
+    Las activas, más las cerradas QUE TODAVÍA TIENEN GENTE.
+
+    Una tienda que cierra no se borra —los expedientes se conservan— sino que
+    se desactiva. Si el filtro ofreciera solo las activas, la gente de una
+    tienda cerrada quedaría imposible de encontrar filtrando: sigue en el
+    listado y no hay casilla que tildar. Fue un reporte: «al filtrar por
+    tienda hay usuarios que no me los trae el filtro».
+
+    Las cerradas y vacías no se ofrecen: llenarían el filtro de tiendas viejas
+    sin nadie adentro, que es justo lo que hace ilegible una lista de 49.
+
+    Se arma a partir de `_tiendas_del_usuario` para no poder desalinearse del
+    recorte por zona; el alta sigue usando esa, porque filtrar por una tienda
+    cerrada está bien y asignarle gente nueva no.
+    """
+    activas = _tiendas_del_usuario(usuario)
+    con_gente = trabajadores_visibles(usuario).values("sede_id")
+    return Sede.objects.select_related("zona").filter(
+        Q(pk__in=activas.values("pk")) | Q(pk__in=con_gente))
+
+
 def _explicar_si_no_hay_tiendas(campo, usuario):
     """Un desplegable vacío no dice nada; este texto sí.
 
@@ -660,7 +684,7 @@ class FiltroTrabajadorForm(forms.Form):
     def __init__(self, *args, usuario=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.usuario = usuario
-        self.fields["sedes"].queryset = _tiendas_del_usuario(usuario)
+        self.fields["sedes"].queryset = _tiendas_para_filtrar(usuario)
         self._aceptar_sede_vieja()
         self.fields["docs"].choices = (
             [("", "Docs: todos")] + self._opciones_docs())
